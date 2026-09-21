@@ -1,0 +1,168 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SgeIfce.Api.Data;
+using SgeIfce.Api.DTOs;
+using SgeIfce.Api.Models;
+using SgeIfce.Api.Services;
+
+namespace SgeIfce.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class CertificatesController : ControllerBase
+{
+    private readonly AppDbContext _context;
+    private readonly ICertificatePdfService _pdfService;
+
+    public CertificatesController(AppDbContext context, ICertificatePdfService pdfService)
+    {
+        _context = context;
+        _pdfService = pdfService;
+    }
+
+    [HttpGet("my")]
+    [Authorize(Roles = "Aluno")]
+    public async Task<ActionResult<ApiResponse<List<CertificateResponseDto>>>> GetMyCertificates()
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized(ApiResponse<List<CertificateResponseDto>>.Fail("Usuário não autenticado."));
+        }
+
+        var certificates = await _context.Certificates
+            .Include(c => c.Event)
+            .Where(c => c.UserId == userId)
+            .OrderByDescending(c => c.IssueDate)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var result = certificates.Select(c => new CertificateResponseDto
+        {
+            Id = c.Id,
+            EventId = c.EventId,
+            EventTitle = c.EventTitle,
+            IssueDate = c.IssueDate.ToString("dd/MM/yyyy"),
+            Workload = c.Workload,
+            Code = c.Code,
+            ParticipantName = c.ParticipantName
+        }).ToList();
+
+        return Ok(ApiResponse<List<CertificateResponseDto>>.Ok(result));
+    }
+
+    [HttpGet("validate/{code}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<ValidateCertificateDto>>> ValidateCertificate(string code)
+    {
+        var normalizedCode = code.Trim().ToUpperInvariant();
+        var cert = await _context.Certificates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Code.ToUpper() == normalizedCode);
+
+        if (cert == null)
+        {
+            return NotFound(ApiResponse<ValidateCertificateDto>.Fail(
+                "Certificado não encontrado.",
+                "O código verificador fornecido não corresponde a nenhum certificado oficial emitido pelo IFCE."
+            ));
+        }
+
+        var dto = new ValidateCertificateDto
+        {
+            Valid = true,
+            Code = cert.Code,
+            ParticipantName = cert.ParticipantName,
+            EventTitle = cert.EventTitle,
+            Workload = cert.Workload,
+            IssueDate = cert.IssueDate.ToString("dd/MM/yyyy"),
+            Institution = "Instituto Federal de Educação, Ciência e Tecnologia do Ceará - Campus Cedro"
+        };
+
+        return Ok(ApiResponse<ValidateCertificateDto>.Ok(dto, "Certificado autêntico emitido pelo IFCE."));
+    }
+
+    [HttpPost("issue")]
+    [Authorize(Roles = "Professor")]
+    public async Task<ActionResult<ApiResponse<IssueResultDto>>> IssueCertificates([FromBody] IssueCertificateDto dto)
+    {
+        var ev = await _context.Events.FindAsync(dto.EventId);
+        if (ev == null)
+        {
+            return NotFound(ApiResponse<IssueResultDto>.Fail("Evento não encontrado."));
+        }
+
+        var query = _context.Attendances
+            .Include(a => a.User)
+            .Where(a => a.EventId == dto.EventId && a.Status == "presente" && !a.CertificateIssued);
+
+        if (dto.AttendanceIds != null && dto.AttendanceIds.Any())
+        {
+            query = query.Where(a => dto.AttendanceIds.Contains(a.Id));
+        }
+
+        var eligibleAttendances = await query.ToListAsync();
+
+        if (!eligibleAttendances.Any())
+        {
+            return Ok(ApiResponse<IssueResultDto>.Ok(
+                new IssueResultDto { TotalIssued = 0 },
+                "Nenhum participante elegível pendente de certificação."
+            ));
+        }
+
+        var issuedCodes = new List<string>();
+
+        foreach (var att in eligibleAttendances)
+        {
+            var randomSuffix = Random.Shared.Next(1000, 9999);
+            var code = $"IFCE-CED-{DateTime.UtcNow.Year}-CERT-{randomSuffix}";
+
+            var certificate = new Certificate
+            {
+                Id = Guid.NewGuid(),
+                EventId = ev.Id,
+                UserId = att.UserId,
+                AttendanceId = att.Id,
+                Code = code,
+                EventTitle = ev.Title,
+                ParticipantName = att.User?.Name ?? "Participante",
+                Workload = ev.Workload,
+                IssueDate = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            att.CertificateIssued = true;
+            _context.Certificates.Add(certificate);
+            issuedCodes.Add(code);
+        }
+
+        await _context.SaveChangesAsync();
+
+        var result = new IssueResultDto
+        {
+            TotalIssued = issuedCodes.Count,
+            IssuedCodes = issuedCodes
+        };
+
+        return Ok(ApiResponse<IssueResultDto>.Ok(result, $"{result.TotalIssued} certificados emitidos com sucesso!"));
+    }
+
+    [HttpGet("{id}/download")]
+    [Authorize]
+    public async Task<IActionResult> DownloadCertificatePdf(Guid id)
+    {
+        var cert = await _context.Certificates.FindAsync(id);
+        if (cert == null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Certificado não encontrado."));
+        }
+
+        var pdfBytes = _pdfService.GeneratePdf(cert);
+        var filename = $"Certificado-IFCE-{cert.Code}.pdf";
+
+        return File(pdfBytes, "application/pdf", filename);
+    }
+}

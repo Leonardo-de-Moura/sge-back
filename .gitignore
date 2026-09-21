@@ -1,0 +1,22 @@
+# .NET Build artifacts
+bin/
+obj/
+out/
+
+# Visual Studio / Rider / VSCode
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+.vscode/
+
+# SQLite Databases & Logs
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Sensitive local configs (if used)
+appsettings.Local.json
