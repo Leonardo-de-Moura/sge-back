@@ -1,171 +1,286 @@
 using System.Text;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+
 using SgeIfce.Api.Data;
 using SgeIfce.Api.Middleware;
 using SgeIfce.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Configuração do Banco de Dados (PostgreSQL / SQLite / In-Memory Fallback)
-var useInMemory = builder.Configuration.GetValue<bool>("UseInMemoryDatabase");
+// ============================================================
+// 1. CONFIGURAÇÃO DO BANCO DE DADOS
+// ============================================================
+// Produção e desenvolvimento utilizam PostgreSQL.
+// A conexão deve estar em:
+// ConnectionStrings:DefaultConnection
+// ============================================================
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "A ConnectionStrings:DefaultConnection não foi configurada."
+    );
+}
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    if (useInMemory)
-    {
-        options.UseInMemoryDatabase("SgeIfceInMemoryDb");
-    }
-    else if (!string.IsNullOrEmpty(connectionString) && (connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase) || connectionString.EndsWith(".db", StringComparison.OrdinalIgnoreCase)))
-    {
-        options.UseSqlite(connectionString);
-    }
-    else if (!string.IsNullOrEmpty(connectionString) && connectionString.Contains("Host="))
-    {
-        options.UseNpgsql(connectionString, npgsqlOptions =>
+    options.UseNpgsql(
+        connectionString,
+        npgsqlOptions =>
         {
-            npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorCodesToAdd: null);
-        });
-    }
-    else
-    {
-        options.UseSqlite("Data Source=sge_ifce.db");
-    }
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null
+            );
+        }
+    );
 });
 
-// 2. Serviços da Aplicação
+// ============================================================
+// 2. SERVIÇOS DA APLICAÇÃO
+// ============================================================
+
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<ICertificatePdfService, CertificatePdfService>();
 
-// 3. Configuração de Autenticação JWT
-var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? "ChaveSuperSecretaPadraoSGEIFCEComMaisDe32BytesDeComprimento!";
+// ============================================================
+// 3. CONFIGURAÇÃO DE AUTENTICAÇÃO JWT
+// ============================================================
+
+var jwtSecretKey = builder.Configuration["Jwt:SecretKey"];
+
+if (string.IsNullOrWhiteSpace(jwtSecretKey))
+{
+    throw new InvalidOperationException(
+        "Jwt:SecretKey não foi configurada."
+    );
+}
+
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SgeIfceApi";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "SgeIfceClient";
 
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme =
+        JwtBearerDefaults.AuthenticationScheme;
+
+    options.DefaultChallengeScheme =
+        JwtBearerDefaults.AuthenticationScheme;
 })
 .AddJwtBearer(options =>
 {
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtSecretKey)
+        ),
+
         ValidateIssuer = true,
         ValidIssuer = jwtIssuer,
+
         ValidateAudience = true,
         ValidAudience = jwtAudience,
+
         ValidateLifetime = true,
+
         ClockSkew = TimeSpan.Zero
     };
 });
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AlunoPolicy", policy => policy.RequireRole("Aluno"));
-    options.AddPolicy("ProfessorPolicy", policy => policy.RequireRole("Professor"));
+    options.AddPolicy(
+        "AlunoPolicy",
+        policy => policy.RequireRole("Aluno")
+    );
+
+    options.AddPolicy(
+        "ProfessorPolicy",
+        policy => policy.RequireRole("Professor")
+    );
 });
 
-// 4. Configuração de CORS Seguro (Sem AllowAnyOrigin + AllowCredentials)
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-    ?? new[] { "http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000" };
+// ============================================================
+// 4. CONFIGURAÇÃO DE CORS
+// ============================================================
+// As origens devem ser configuradas em:
+// Cors:AllowedOrigins
+//
+// Exemplo local:
+// http://localhost:3000
+// http://localhost:5173
+//
+// No deploy, adicionar a URL do frontend da Vercel.
+// ============================================================
+
+var allowedOrigins =
+    builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>()
+    ?? Array.Empty<string>();
+
+if (allowedOrigins.Length == 0)
+{
+    throw new InvalidOperationException(
+        "Nenhuma origem foi configurada em Cors:AllowedOrigins."
+    );
+}
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("SgeCorsPolicy", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        policy
+            .WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
-// 5. Controllers com validação de formato
-builder.Services.AddControllers()
+// ============================================================
+// 5. CONTROLLERS
+// ============================================================
+
+builder.Services
+    .AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
         options.SuppressModelStateInvalidFilter = false;
     });
 
-// 6. Swagger / OpenAPI com suporte a JWT Bearer
+// ============================================================
+// 6. SWAGGER / OPENAPI
+// ============================================================
+
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "SGE-IFCE API",
         Version = "v1",
-        Description = "API REST oficial do Sistema de Gestão de Eventos do IFCE Campus Cedro."
+        Description =
+            "API REST oficial do Sistema de Gestão de Eventos do IFCE Campus Cedro."
     });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "Insira o token JWT no formato: Bearer {seu_token}",
+        Description =
+            "Insira o token JWT no formato: Bearer {seu_token}",
+
         Name = "Authorization",
+
         In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+
+        Type = SecuritySchemeType.Http,
+
+        Scheme = "bearer",
+
+        BearerFormat = "JWT"
     });
 
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
+    c.AddSecurityRequirement(
+        new OpenApiSecurityRequirement
         {
-            new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference
+                new OpenApiSecurityScheme
                 {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+
+                Array.Empty<string>()
+            }
         }
-    });
+    );
 });
+
+// ============================================================
+// 7. CONSTRUÇÃO DA APLICAÇÃO
+// ============================================================
 
 var app = builder.Build();
 
-// 7. Migrações e Inicialização do Banco de Dados
+// ============================================================
+// 8. MIGRAÇÃO E INICIALIZAÇÃO DO BANCO
+// ============================================================
+
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
+
         await DbInitializer.InitializeAsync(context);
     }
     catch (Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Erro ao inicializar o banco de dados.");
+        var logger =
+            services.GetRequiredService<ILogger<Program>>();
+
+        logger.LogError(
+            ex,
+            "Erro ao inicializar o banco de dados."
+        );
+
+        throw;
     }
 }
 
-// 8. Pipeline HTTP
+// ============================================================
+// 9. PIPELINE HTTP
+// ============================================================
+
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
+// Swagger
 app.UseSwagger();
+
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "SGE-IFCE API v1");
+    c.SwaggerEndpoint(
+        "/swagger/v1/swagger.json",
+        "SGE-IFCE API v1"
+    );
+
     c.RoutePrefix = "swagger";
 });
 
+// CORS
 app.UseCors("SgeCorsPolicy");
 
+// Autenticação
 app.UseAuthentication();
+
+// Autorização
 app.UseAuthorization();
 
+// Controllers
 app.MapControllers();
+
+// ============================================================
+// 10. EXECUÇÃO
+// ============================================================
 
 app.Run();
 

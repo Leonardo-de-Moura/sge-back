@@ -5,13 +5,13 @@ namespace SgeIfce.Api.DTOs;
 public class CreateRegistrationDto
 {
     [Required(ErrorMessage = "O ID do evento é obrigatório.")]
-    public Guid EventId { get; set; }
+    public string EventId { get; set; } = string.Empty;
 }
 
 public class RegistrationResponseDto
 {
-    public Guid Id { get; set; }
-    public Guid EventId { get; set; }
+    public string Id { get; set; } = string.Empty;
+    public string EventId { get; set; } = string.Empty;
     public string EventTitle { get; set; } = string.Empty;
     public string Date { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;

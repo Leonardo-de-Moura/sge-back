@@ -5,7 +5,8 @@ namespace SgeIfce.Api.Models;
 public class User
 {
     [Key]
-    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(64)]
+    public string Id { get; set; } = string.Empty;
 
     [Required]
     [MaxLength(150)]
@@ -17,11 +18,12 @@ public class User
     public string Email { get; set; } = string.Empty;
 
     [Required]
+    [MaxLength(255)]
     public string PasswordHash { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(30)]
-    public string Role { get; set; } = "Aluno"; // "Aluno" | "Professor"
+    [MaxLength(20)]
+    public string Role { get; set; } = "Aluno";
 
     [MaxLength(50)]
     public string? Matricula { get; set; }
@@ -29,14 +31,27 @@ public class User
     [MaxLength(50)]
     public string? Siape { get; set; }
 
-    [MaxLength(300)]
+    [MaxLength(100)]
+    public string? Department { get; set; }
+
+    [MaxLength(100)]
+    public string? Course { get; set; }
+
+    [MaxLength(30)]
+    public string? Phone { get; set; }
+
+    [MaxLength(500)]
     public string? AvatarUrl { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    // Navigation properties
+    public DateTime? UpdatedAt { get; set; }
+
     public ICollection<Registration> Registrations { get; set; } = new List<Registration>();
+
     public ICollection<Attendance> Attendances { get; set; } = new List<Attendance>();
+
     public ICollection<Certificate> Certificates { get; set; } = new List<Certificate>();
+
     public ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
 }

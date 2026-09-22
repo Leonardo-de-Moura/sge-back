@@ -19,7 +19,7 @@ public class AttendanceController : ControllerBase
     }
 
     [HttpGet("event/{eventId}")]
-    public async Task<ActionResult<ApiResponse<List<ParticipantAttendanceDto>>>> GetAttendancesByEvent(Guid eventId)
+    public async Task<ActionResult<ApiResponse<List<ParticipantAttendanceDto>>>> GetAttendancesByEvent(string eventId)
     {
         var attendances = await _context.Attendances
             .Include(a => a.User)
@@ -44,7 +44,7 @@ public class AttendanceController : ControllerBase
     }
 
     [HttpPatch("{id}")]
-    public async Task<ActionResult<ApiResponse<ParticipantAttendanceDto>>> UpdateStatus(Guid id, [FromBody] UpdateAttendanceDto dto)
+    public async Task<ActionResult<ApiResponse<ParticipantAttendanceDto>>> UpdateStatus(string id, [FromBody] UpdateAttendanceDto dto)
     {
         var attendance = await _context.Attendances
             .Include(a => a.User)

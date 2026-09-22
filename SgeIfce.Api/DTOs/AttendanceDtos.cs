@@ -4,8 +4,8 @@ namespace SgeIfce.Api.DTOs;
 
 public class ParticipantAttendanceDto
 {
-    public Guid Id { get; set; }
-    public Guid UserId { get; set; }
+    public string Id { get; set; } = string.Empty;
+    public string? UserId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Matricula { get; set; } = string.Empty;
@@ -24,7 +24,7 @@ public class UpdateAttendanceDto
 public class BulkAttendanceItemDto
 {
     [Required]
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
 
     [Required]
     public string Status { get; set; } = "presente";
@@ -33,7 +33,7 @@ public class BulkAttendanceItemDto
 public class BulkAttendanceDto
 {
     [Required]
-    public Guid EventId { get; set; }
+    public string EventId { get; set; } = string.Empty;
 
     [Required]
     public List<BulkAttendanceItemDto> Attendances { get; set; } = new();

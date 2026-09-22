@@ -25,7 +25,13 @@ public class RegistrationsController : ControllerBase
     public async Task<ActionResult<ApiResponse<RegistrationResponseDto>>> Register([FromBody] CreateRegistrationDto dto)
     {
         var userId = GetCurrentUserId();
-        if (userId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(ApiResponse<RegistrationResponseDto>.Fail("Usuário não autenticado."));
+        }
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
         {
             return Unauthorized(ApiResponse<RegistrationResponseDto>.Fail("Usuário não autenticado."));
         }
@@ -66,9 +72,11 @@ public class RegistrationsController : ControllerBase
 
         var reg = new Registration
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.NewGuid().ToString(),
             UserId = userId,
             EventId = ev.Id,
+            EventTitle = ev.Title,
+            RegistrationDate = DateTime.UtcNow,
             TicketCode = ticketCode,
             Status = "confirmado",
             CreatedAt = DateTime.UtcNow
@@ -77,10 +85,12 @@ public class RegistrationsController : ControllerBase
         // Automatic attendance record creation
         var attendance = new Attendance
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.NewGuid().ToString(),
             EventId = ev.Id,
             UserId = userId,
-            RegistrationId = reg.Id,
+            ParticipantName = user.Name,
+            ParticipantEmail = user.Email,
+            Matricula = user.Matricula ?? string.Empty,
             Status = "pendente",
             CertificateIssued = false,
             CreatedAt = DateTime.UtcNow
@@ -111,7 +121,7 @@ public class RegistrationsController : ControllerBase
     public async Task<ActionResult<ApiResponse<List<RegistrationResponseDto>>>> GetMyRegistrations()
     {
         var userId = GetCurrentUserId();
-        if (userId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(userId))
         {
             return Unauthorized(ApiResponse<List<RegistrationResponseDto>>.Fail("Usuário não autenticado."));
         }
@@ -140,7 +150,7 @@ public class RegistrationsController : ControllerBase
     }
 
     [HttpGet("{id}/ticket")]
-    public async Task<ActionResult<ApiResponse<TicketDto>>> GetTicket(Guid id)
+    public async Task<ActionResult<ApiResponse<TicketDto>>> GetTicket(string id)
     {
         var reg = await _context.Registrations
             .Include(r => r.Event)
@@ -177,7 +187,7 @@ public class RegistrationsController : ControllerBase
 
     [HttpPatch("{id}/cancel")]
     [Authorize(Roles = "Aluno")]
-    public async Task<ActionResult<ApiResponse<RegistrationResponseDto>>> CancelRegistration(Guid id)
+    public async Task<ActionResult<ApiResponse<RegistrationResponseDto>>> CancelRegistration(string id)
     {
         var userId = GetCurrentUserId();
         var reg = await _context.Registrations
@@ -197,7 +207,8 @@ public class RegistrationsController : ControllerBase
         reg.Status = "cancelado";
 
         // Atualiza a presença correspondente se houver
-        var attendance = await _context.Attendances.FirstOrDefaultAsync(a => a.RegistrationId == reg.Id);
+        var attendance = await _context.Attendances.FirstOrDefaultAsync(a =>
+            a.EventId == reg.EventId && a.UserId == reg.UserId);
         if (attendance != null)
         {
             attendance.Status = "ausente";
@@ -218,9 +229,8 @@ public class RegistrationsController : ControllerBase
         return Ok(ApiResponse<RegistrationResponseDto>.Ok(response, "Inscrição cancelada com sucesso."));
     }
 
-    private Guid GetCurrentUserId()
+    private string? GetCurrentUserId()
     {
-        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        return Guid.TryParse(claim, out var id) ? id : Guid.Empty;
+        return User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
     }
 }

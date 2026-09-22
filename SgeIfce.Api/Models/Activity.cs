@@ -6,10 +6,12 @@ namespace SgeIfce.Api.Models;
 public class Activity
 {
     [Key]
-    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(64)]
+    public string Id { get; set; } = string.Empty;
 
     [Required]
-    public Guid EventId { get; set; }
+    [MaxLength(64)]
+    public string EventId { get; set; } = string.Empty;
 
     [ForeignKey(nameof(EventId))]
     public Event? Event { get; set; }
@@ -19,12 +21,18 @@ public class Activity
     public string Title { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(80)]
+    [MaxLength(60)]
     public string Time { get; set; } = string.Empty;
 
     [MaxLength(150)]
     public string? Speaker { get; set; }
 
-    [MaxLength(150)]
+    [MaxLength(200)]
     public string? Location { get; set; }
+
+    public int Order { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
 }

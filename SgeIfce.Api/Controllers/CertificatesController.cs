@@ -27,14 +27,14 @@ public class CertificatesController : ControllerBase
     public async Task<ActionResult<ApiResponse<List<CertificateResponseDto>>>> GetMyCertificates()
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(userIdClaim, out var userId))
+        if (string.IsNullOrWhiteSpace(userIdClaim))
         {
             return Unauthorized(ApiResponse<List<CertificateResponseDto>>.Fail("Usuário não autenticado."));
         }
 
         var certificates = await _context.Certificates
             .Include(c => c.Event)
-            .Where(c => c.UserId == userId)
+            .Where(c => c.UserId == userIdClaim)
             .OrderByDescending(c => c.IssueDate)
             .AsNoTracking()
             .ToListAsync();
@@ -46,7 +46,7 @@ public class CertificatesController : ControllerBase
             EventTitle = c.EventTitle,
             IssueDate = c.IssueDate.ToString("dd/MM/yyyy"),
             Workload = c.Workload,
-            Code = c.Code,
+            ValidationCode = c.ValidationCode,
             ParticipantName = c.ParticipantName
         }).ToList();
 
@@ -60,7 +60,7 @@ public class CertificatesController : ControllerBase
         var normalizedCode = code.Trim().ToUpperInvariant();
         var cert = await _context.Certificates
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Code.ToUpper() == normalizedCode);
+            .FirstOrDefaultAsync(c => c.ValidationCode.ToUpper() == normalizedCode);
 
         if (cert == null)
         {
@@ -73,7 +73,7 @@ public class CertificatesController : ControllerBase
         var dto = new ValidateCertificateDto
         {
             Valid = true,
-            Code = cert.Code,
+            ValidationCode = cert.ValidationCode,
             ParticipantName = cert.ParticipantName,
             EventTitle = cert.EventTitle,
             Workload = cert.Workload,
@@ -122,13 +122,14 @@ public class CertificatesController : ControllerBase
 
             var certificate = new Certificate
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.NewGuid().ToString(),
                 EventId = ev.Id,
                 UserId = att.UserId,
-                AttendanceId = att.Id,
-                Code = code,
+                ValidationCode = code,
                 EventTitle = ev.Title,
                 ParticipantName = att.User?.Name ?? "Participante",
+                ParticipantEmail = att.User?.Email ?? att.ParticipantEmail,
+                Matricula = att.User?.Matricula ?? att.Matricula,
                 Workload = ev.Workload,
                 IssueDate = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow
@@ -152,7 +153,7 @@ public class CertificatesController : ControllerBase
 
     [HttpGet("{id}/download")]
     [Authorize]
-    public async Task<IActionResult> DownloadCertificatePdf(Guid id)
+    public async Task<IActionResult> DownloadCertificatePdf(string id)
     {
         var cert = await _context.Certificates.FindAsync(id);
         if (cert == null)
@@ -161,7 +162,7 @@ public class CertificatesController : ControllerBase
         }
 
         var pdfBytes = _pdfService.GeneratePdf(cert);
-        var filename = $"Certificado-IFCE-{cert.Code}.pdf";
+        var filename = $"Certificado-IFCE-{cert.ValidationCode}.pdf";
 
         return File(pdfBytes, "application/pdf", filename);
     }

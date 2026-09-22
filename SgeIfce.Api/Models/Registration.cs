@@ -6,30 +6,39 @@ namespace SgeIfce.Api.Models;
 public class Registration
 {
     [Key]
-    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(64)]
+    public string Id { get; set; } = string.Empty;
 
     [Required]
-    public Guid UserId { get; set; }
+    [MaxLength(64)]
+    public string UserId { get; set; } = string.Empty;
 
     [ForeignKey(nameof(UserId))]
     public User? User { get; set; }
 
     [Required]
-    public Guid EventId { get; set; }
+    [MaxLength(64)]
+    public string EventId { get; set; } = string.Empty;
 
     [ForeignKey(nameof(EventId))]
     public Event? Event { get; set; }
 
     [Required]
-    [MaxLength(50)]
-    public string TicketCode { get; set; } = string.Empty;
+    [MaxLength(255)]
+    public string EventTitle { get; set; } = string.Empty;
+
+    public DateTime RegistrationDate { get; set; }
 
     [Required]
     [MaxLength(30)]
-    public string Status { get; set; } = "confirmado"; // confirmado, cancelado
+    public string Status { get; set; } = "confirmado";
+
+    [Required]
+    [MaxLength(60)]
+    public string TicketCode { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    // Navigation
-    public Attendance? Attendance { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+
 }

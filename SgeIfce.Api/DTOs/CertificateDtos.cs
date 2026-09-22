@@ -4,19 +4,19 @@ namespace SgeIfce.Api.DTOs;
 
 public class CertificateResponseDto
 {
-    public Guid Id { get; set; }
-    public Guid EventId { get; set; }
+    public string Id { get; set; } = string.Empty;
+    public string EventId { get; set; } = string.Empty;
     public string EventTitle { get; set; } = string.Empty;
     public string IssueDate { get; set; } = string.Empty;
     public string Workload { get; set; } = string.Empty;
-    public string Code { get; set; } = string.Empty;
+    public string ValidationCode { get; set; } = string.Empty;
     public string ParticipantName { get; set; } = string.Empty;
 }
 
 public class ValidateCertificateDto
 {
     public bool Valid { get; set; }
-    public string? Code { get; set; }
+    public string? ValidationCode { get; set; }
     public string? ParticipantName { get; set; }
     public string? EventTitle { get; set; }
     public string? Workload { get; set; }
@@ -27,9 +27,9 @@ public class ValidateCertificateDto
 public class IssueCertificateDto
 {
     [Required(ErrorMessage = "O ID do evento é obrigatório.")]
-    public Guid EventId { get; set; }
+    public string EventId { get; set; } = string.Empty;
 
-    public List<Guid>? AttendanceIds { get; set; }
+    public List<string>? AttendanceIds { get; set; }
 }
 
 public class IssueResultDto

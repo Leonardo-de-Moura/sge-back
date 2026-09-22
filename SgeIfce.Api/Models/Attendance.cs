@@ -6,28 +6,40 @@ namespace SgeIfce.Api.Models;
 public class Attendance
 {
     [Key]
-    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(64)]
+    public string Id { get; set; } = string.Empty;
 
     [Required]
-    public Guid EventId { get; set; }
+    [MaxLength(64)]
+    public string EventId { get; set; } = string.Empty;
 
     [ForeignKey(nameof(EventId))]
     public Event? Event { get; set; }
 
-    [Required]
-    public Guid UserId { get; set; }
+    [MaxLength(64)]
+    public string? UserId { get; set; }
 
     [ForeignKey(nameof(UserId))]
     public User? User { get; set; }
 
-    public Guid? RegistrationId { get; set; }
+    [Required]
+    [MaxLength(150)]
+    public string ParticipantName { get; set; } = string.Empty;
 
-    [ForeignKey(nameof(RegistrationId))]
-    public Registration? Registration { get; set; }
+    [Required]
+    [MaxLength(150)]
+    public string ParticipantEmail { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(50)]
+    public string Matricula { get; set; } = string.Empty;
 
     [Required]
     [MaxLength(30)]
-    public string Status { get; set; } = "pendente"; // presente, ausente, pendente
+    public string Status { get; set; } = "pendente";
+
+    [MaxLength(500)]
+    public string? AvatarUrl { get; set; }
 
     public bool CertificateIssued { get; set; } = false;
 
@@ -35,6 +47,5 @@ public class Attendance
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    // Navigation
-    public Certificate? Certificate { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }

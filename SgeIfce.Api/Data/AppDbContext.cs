@@ -5,7 +5,8 @@ namespace SgeIfce.Api.Data;
 
 public class AppDbContext : DbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
     {
     }
 
@@ -20,85 +21,154 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // User
+        // ============================================================
+        // USERS
+        // ============================================================
+
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasIndex(u => u.Email).IsUnique();
-            entity.Property(u => u.Role).HasDefaultValue("Aluno");
+            entity.ToTable("users");
+
+            entity.HasKey(u => u.Id);
+
+            entity.HasIndex(u => u.Email)
+                .IsUnique()
+                .HasDatabaseName("IX_users_Email");
+
+            entity.HasIndex(u => u.Matricula)
+                .HasDatabaseName("IX_users_Matricula");
+
+            entity.HasIndex(u => u.Siape)
+                .HasDatabaseName("IX_users_Siape");
+
+            // O banco atual não possui DEFAULT para Role.
         });
 
-        // Event
+        // ============================================================
+        // EVENTS
+        // ============================================================
+
         modelBuilder.Entity<Event>(entity =>
         {
+            entity.ToTable("events");
+
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => e.OrganizerId)
+                .HasDatabaseName("IX_events_OrganizerId");
+
             entity.HasOne(e => e.Organizer)
-                  .WithMany(u => u.OrganizedEvents)
-                  .HasForeignKey(e => e.OrganizerId)
-                  .OnDelete(DeleteBehavior.SetNull);
+                .WithMany(u => u.OrganizedEvents)
+                .HasForeignKey(e => e.OrganizerId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
-        // Activity
+        // ============================================================
+        // ACTIVITIES
+        // ============================================================
+
         modelBuilder.Entity<Activity>(entity =>
         {
+            entity.ToTable("activities");
+
+            entity.HasKey(a => a.Id);
+
+            entity.HasIndex(a => a.EventId)
+                .HasDatabaseName("IX_activities_EventId");
+
             entity.HasOne(a => a.Event)
-                  .WithMany(e => e.Activities)
-                  .HasForeignKey(a => a.EventId)
-                  .OnDelete(DeleteBehavior.Cascade);
+                .WithMany(e => e.Activities)
+                .HasForeignKey(a => a.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Registration
+        // ============================================================
+        // REGISTRATIONS
+        // ============================================================
+
         modelBuilder.Entity<Registration>(entity =>
         {
-            entity.HasIndex(r => r.TicketCode).IsUnique();
+            entity.ToTable("registrations");
+
+            entity.HasKey(r => r.Id);
+
+            entity.HasIndex(r => r.EventId)
+                .HasDatabaseName("IX_registrations_EventId");
+
+            entity.HasIndex(r => r.UserId)
+                .HasDatabaseName("IX_registrations_UserId");
+
+            entity.HasIndex(r => r.TicketCode)
+                .IsUnique()
+                .HasDatabaseName("IX_registrations_TicketCode");
 
             entity.HasOne(r => r.User)
-                  .WithMany(u => u.Registrations)
-                  .HasForeignKey(r => r.UserId)
-                  .OnDelete(DeleteBehavior.Cascade);
+                .WithMany(u => u.Registrations)
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(r => r.Event)
-                  .WithMany(e => e.Registrations)
-                  .HasForeignKey(r => r.EventId)
-                  .OnDelete(DeleteBehavior.Cascade);
+                .WithMany(e => e.Registrations)
+                .HasForeignKey(r => r.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Attendance
+        // ============================================================
+        // ATTENDANCES
+        // ============================================================
+
         modelBuilder.Entity<Attendance>(entity =>
         {
+            entity.ToTable("attendances");
+
+            entity.HasKey(a => a.Id);
+
+            entity.HasIndex(a => a.EventId)
+                .HasDatabaseName("IX_attendances_EventId");
+
+            entity.HasIndex(a => a.UserId)
+                .HasDatabaseName("IX_attendances_UserId");
+
             entity.HasOne(a => a.Event)
-                  .WithMany(e => e.Attendances)
-                  .HasForeignKey(a => a.EventId)
-                  .OnDelete(DeleteBehavior.Cascade);
+                .WithMany(e => e.Attendances)
+                .HasForeignKey(a => a.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(a => a.User)
-                  .WithMany(u => u.Attendances)
-                  .HasForeignKey(a => a.UserId)
-                  .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(a => a.Registration)
-                  .WithOne(r => r.Attendance)
-                  .HasForeignKey<Attendance>(a => a.RegistrationId)
-                  .OnDelete(DeleteBehavior.SetNull);
+                .WithMany(u => u.Attendances)
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
-        // Certificate
+        // ============================================================
+        // CERTIFICATES
+        // ============================================================
+
         modelBuilder.Entity<Certificate>(entity =>
         {
-            entity.HasIndex(c => c.Code).IsUnique();
+            entity.ToTable("certificates");
+
+            entity.HasKey(c => c.Id);
+
+            entity.HasIndex(c => c.EventId)
+                .HasDatabaseName("IX_certificates_EventId");
+
+            entity.HasIndex(c => c.UserId)
+                .HasDatabaseName("IX_certificates_UserId");
+
+            entity.HasIndex(c => c.ValidationCode)
+                .IsUnique()
+                .HasDatabaseName("IX_certificates_ValidationCode");
 
             entity.HasOne(c => c.Event)
-                  .WithMany(e => e.Certificates)
-                  .HasForeignKey(c => c.EventId)
-                  .OnDelete(DeleteBehavior.Cascade);
+                .WithMany(e => e.Certificates)
+                .HasForeignKey(c => c.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(c => c.User)
-                  .WithMany(u => u.Certificates)
-                  .HasForeignKey(c => c.UserId)
-                  .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(c => c.Attendance)
-                  .WithOne(a => a.Certificate)
-                  .HasForeignKey<Certificate>(c => c.AttendanceId)
-                  .OnDelete(DeleteBehavior.SetNull);
+                .WithMany(u => u.Certificates)
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

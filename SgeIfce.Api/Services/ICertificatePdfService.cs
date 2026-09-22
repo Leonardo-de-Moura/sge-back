@@ -16,7 +16,7 @@ public class CertificatePdfService : ICertificatePdfService
         var title = certificate.EventTitle;
         var student = certificate.ParticipantName;
         var workload = certificate.Workload;
-        var code = certificate.Code;
+        var code = certificate.ValidationCode;
         var date = certificate.IssueDate.ToString("dd/MM/yyyy");
 
         var textContent = $"""
