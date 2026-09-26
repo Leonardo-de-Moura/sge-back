@@ -20,3 +20,4 @@ out/
 
 # Sensitive local configs (if used)
 appsettings.Local.json
+.env

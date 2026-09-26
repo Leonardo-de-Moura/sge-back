@@ -18,8 +18,8 @@ WORKDIR /app
 
 COPY --from=build /app/publish .
 
-ENV ASPNETCORE_URLS=http://0.0.0.0:10000
+ENV ASPNETCORE_URLS=http://0.0.0.0:5000
 
-EXPOSE 10000
+EXPOSE 5000
 
 ENTRYPOINT ["dotnet", "SgeIfce.Api.dll"]

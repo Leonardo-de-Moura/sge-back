@@ -63,11 +63,42 @@ A API estará disponível em:
 
 ## 🐳 Executando com Docker & Docker Compose
 
-Para rodar a API com um banco PostgreSQL real conteinerizado:
+Pré-requisitos: Docker Engine e o plugin Docker Compose instalados e em execução.
+
+Na pasta `dist-repos/sge-ifce-backend`, suba a API e o PostgreSQL:
 
 ```bash
 docker compose up --build
 ```
+
+O Compose aguarda o PostgreSQL ficar saudável. Na primeira inicialização, a API
+aplica as migrations do Entity Framework e semeia o banco. A API estará disponível
+em `http://localhost:5000/swagger`; o PostgreSQL fica acessível no host pela porta
+`5433` (dentro da rede Docker, a API usa `db:5432`).
+
+O pgAdmin também estará disponível em `http://localhost:5050`. Entre com `admin@sge-ifce.com`
+e `sge-local-admin` e registre uma conexão PostgreSQL com estes dados:
+
+| Campo | Valor |
+|---|---|
+| Host | `db` |
+| Porta | `5432` |
+| Banco de manutenção | `sge_ifce_db` |
+| Usuário | `postgres` |
+| Senha | `postgres` |
+
+O host `db` é o nome do serviço dentro da rede Docker. Para credenciais diferentes, configure
+`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `PGADMIN_DEFAULT_EMAIL` e
+`PGADMIN_DEFAULT_PASSWORD` no ambiente antes de subir os serviços. A porta do pgAdmin está
+vinculada a `127.0.0.1`, portanto não fica exposta à rede local.
+
+Para acompanhar os serviços, use `docker compose ps` e `docker compose logs -f`.
+Para pará-los, pressione `Ctrl+C` e execute `docker compose down`. Os dados continuam
+no volume `pgdata`; para apagá-los também, execute `docker compose down -v`.
+
+É possível configurar `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` e
+`POSTGRES_PORT` no ambiente antes de subir os serviços. Os valores padrão são para
+desenvolvimento local; defina uma senha própria fora desse contexto.
 
 ---
 

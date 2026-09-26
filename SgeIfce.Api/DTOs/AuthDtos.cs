@@ -80,3 +80,4 @@ public class ForgotPasswordDto
     [EmailAddress(ErrorMessage = "Formato de e-mail inválido.")]
     public string Email { get; set; } = string.Empty;
 }
+

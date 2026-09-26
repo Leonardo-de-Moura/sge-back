@@ -231,6 +231,15 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<AppDbContext>();
 
+        if (context.Database.IsRelational() &&
+            !string.Equals(
+                context.Database.ProviderName,
+                "Microsoft.EntityFrameworkCore.Sqlite",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            await context.Database.MigrateAsync();
+        }
+
         await DbInitializer.InitializeAsync(context);
     }
     catch (Exception ex)
