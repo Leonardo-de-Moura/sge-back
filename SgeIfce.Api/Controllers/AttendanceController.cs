@@ -31,9 +31,9 @@ public class AttendanceController : ControllerBase
         {
             Id = a.Id,
             UserId = a.UserId,
-            Name = a.User?.Name ?? "Discente",
-            Email = a.User?.Email ?? "",
-            Matricula = a.User?.Matricula ?? a.User?.Siape ?? "N/A",
+            Name = a.User?.Name ?? a.ParticipantName,
+            Email = a.User?.Email ?? a.ParticipantEmail,
+            Matricula = a.User?.Matricula ?? a.Matricula,
             Status = a.Status,
             CertificateIssued = a.CertificateIssued,
             AvatarUrl = a.User?.AvatarUrl,
@@ -62,10 +62,10 @@ public class AttendanceController : ControllerBase
         }
 
         attendance.Status = normalizedStatus;
-        if (normalizedStatus == "presente" && !attendance.CheckedInAt.HasValue)
-        {
-            attendance.CheckedInAt = DateTime.UtcNow;
-        }
+        attendance.CheckedInAt = normalizedStatus == "presente"
+            ? attendance.CheckedInAt ?? DateTime.UtcNow
+            : null;
+        attendance.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
@@ -73,9 +73,9 @@ public class AttendanceController : ControllerBase
         {
             Id = attendance.Id,
             UserId = attendance.UserId,
-            Name = attendance.User?.Name ?? "",
-            Email = attendance.User?.Email ?? "",
-            Matricula = attendance.User?.Matricula ?? "N/A",
+            Name = attendance.User?.Name ?? attendance.ParticipantName,
+            Email = attendance.User?.Email ?? attendance.ParticipantEmail,
+            Matricula = attendance.User?.Matricula ?? attendance.Matricula,
             Status = attendance.Status,
             CertificateIssued = attendance.CertificateIssued,
             CheckedInAt = attendance.CheckedInAt
@@ -92,8 +92,39 @@ public class AttendanceController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail("Lista de presenças vazia."));
         }
 
+        var eventExists = await _context.Events.AnyAsync(e => e.Id == dto.EventId);
+        if (!eventExists)
+        {
+            return NotFound(ApiResponse<object>.Fail("Evento não encontrado."));
+        }
+
         var ids = dto.Attendances.Select(x => x.Id).ToList();
-        var records = await _context.Attendances.Where(a => ids.Contains(a.Id)).ToListAsync();
+        if (ids.Count != ids.Distinct().Count())
+        {
+            return BadRequest(ApiResponse<object>.Fail("A lista contém participantes duplicados."));
+        }
+
+        var records = await _context.Attendances
+            .Where(a => a.EventId == dto.EventId && ids.Contains(a.Id))
+            .ToListAsync();
+
+        if (records.Count != ids.Distinct().Count())
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                "A lista contém participantes que não pertencem ao evento selecionado."
+            ));
+        }
+
+        foreach (var item in dto.Attendances)
+        {
+            var normalizedStatus = item.Status.Trim().ToLowerInvariant();
+            if (normalizedStatus != "presente" && normalizedStatus != "ausente" && normalizedStatus != "pendente")
+            {
+                return BadRequest(ApiResponse<object>.Fail(
+                    "Status inválido. Use 'presente', 'ausente' ou 'pendente'."
+                ));
+            }
+        }
 
         foreach (var item in dto.Attendances)
         {
@@ -101,14 +132,11 @@ public class AttendanceController : ControllerBase
             if (record != null)
             {
                 var norm = item.Status.Trim().ToLowerInvariant();
-                if (norm == "presente" || norm == "ausente" || norm == "pendente")
-                {
-                    record.Status = norm;
-                    if (norm == "presente" && !record.CheckedInAt.HasValue)
-                    {
-                        record.CheckedInAt = DateTime.UtcNow;
-                    }
-                }
+                record.Status = norm;
+                record.CheckedInAt = norm == "presente"
+                    ? record.CheckedInAt ?? DateTime.UtcNow
+                    : null;
+                record.UpdatedAt = DateTime.UtcNow;
             }
         }
 

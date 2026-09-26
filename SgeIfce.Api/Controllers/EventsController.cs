@@ -121,6 +121,13 @@ public class EventsController : ControllerBase
             );
         }
 
+        if (dto.EndDate.HasValue && dto.EndDate.Value.Date < dto.StartDate.Date)
+        {
+            return BadRequest(ApiResponse<EventResponseDto>.Fail(
+                "A data de término não pode ser anterior à data de início."
+            ));
+        }
+
         var userIdClaim =
             User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
@@ -209,6 +216,15 @@ public class EventsController : ControllerBase
                     "Evento não encontrado."
                 )
             );
+        }
+
+        var effectiveStartDate = dto.StartDate ?? ev.StartDate;
+        var effectiveEndDate = dto.EndDate ?? ev.EndDate;
+        if (effectiveEndDate.HasValue && effectiveEndDate.Value.Date < effectiveStartDate.Date)
+        {
+            return BadRequest(ApiResponse<EventResponseDto>.Fail(
+                "A data de término não pode ser anterior à data de início."
+            ));
         }
 
         if (!string.IsNullOrWhiteSpace(dto.Title))

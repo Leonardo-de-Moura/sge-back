@@ -117,8 +117,13 @@ public class CertificatesController : ControllerBase
 
         foreach (var att in eligibleAttendances)
         {
-            var randomSuffix = Random.Shared.Next(1000, 9999);
-            var code = $"IFCE-CED-{DateTime.UtcNow.Year}-CERT-{randomSuffix}";
+            string code;
+            do
+            {
+                code = $"IFCE-CED-{DateTime.UtcNow.Year}-CERT-{Guid.NewGuid():N}".ToUpperInvariant();
+            }
+            while (issuedCodes.Contains(code) ||
+                   await _context.Certificates.AnyAsync(c => c.ValidationCode == code));
 
             var certificate = new Certificate
             {
