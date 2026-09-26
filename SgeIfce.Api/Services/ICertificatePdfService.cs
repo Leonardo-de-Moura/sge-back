@@ -52,22 +52,28 @@ public class CertificatePdfService : ICertificatePdfService
         var streamLength = streamBytes.Length;
 
         var pdfBuilder = new StringBuilder();
+        var objectOffsets = new List<int> { 0 };
         pdfBuilder.Append("%PDF-1.4\n");
+        objectOffsets.Add(Encoding.ASCII.GetByteCount(pdfBuilder.ToString()));
         pdfBuilder.Append("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        objectOffsets.Add(Encoding.ASCII.GetByteCount(pdfBuilder.ToString()));
         pdfBuilder.Append("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        objectOffsets.Add(Encoding.ASCII.GetByteCount(pdfBuilder.ToString()));
         pdfBuilder.Append("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n");
+        objectOffsets.Add(Encoding.ASCII.GetByteCount(pdfBuilder.ToString()));
         pdfBuilder.Append($"4 0 obj\n<< /Length {streamLength} >>\nstream\n");
         pdfBuilder.Append(textContent);
         pdfBuilder.Append("\nendstream\nendobj\n");
+        objectOffsets.Add(Encoding.ASCII.GetByteCount(pdfBuilder.ToString()));
         pdfBuilder.Append("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n");
-        pdfBuilder.Append("xref\n0 6\n");
+        var crossReferenceOffset = Encoding.ASCII.GetByteCount(pdfBuilder.ToString());
+        pdfBuilder.Append($"xref\n0 {objectOffsets.Count}\n");
         pdfBuilder.Append("0000000000 65535 f \n");
-        pdfBuilder.Append("0000000009 00000 n \n");
-        pdfBuilder.Append("0000000058 00000 n \n");
-        pdfBuilder.Append("0000000115 00000 n \n");
-        pdfBuilder.Append("0000000250 00000 n \n");
-        pdfBuilder.Append("0000000450 00000 n \n");
-        pdfBuilder.Append("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n520\n%%EOF\n");
+        foreach (var offset in objectOffsets.Skip(1))
+        {
+            pdfBuilder.Append($"{offset:D10} 00000 n \n");
+        }
+        pdfBuilder.Append($"trailer\n<< /Size {objectOffsets.Count} /Root 1 0 R >>\nstartxref\n{crossReferenceOffset}\n%%EOF\n");
 
         return Encoding.ASCII.GetBytes(pdfBuilder.ToString());
     }

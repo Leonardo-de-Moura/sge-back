@@ -48,6 +48,9 @@ public class CreateEventDto
     public DateTime StartDate { get; set; } = DateTime.UtcNow.AddDays(7);
     public DateTime? EndDate { get; set; }
 
+    [MaxLength(30)]
+    public string? DayMonth { get; set; }
+
     public string Workload { get; set; } = "4 horas";
 
     [Required(ErrorMessage = "O local é obrigatório.")]

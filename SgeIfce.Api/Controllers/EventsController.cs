@@ -137,8 +137,13 @@ public class EventsController : ControllerBase
             Description = dto.Description.Trim(),
             Category = dto.Category.Trim(),
             Modality = dto.Modality.Trim(),
-            StartDate = dto.StartDate,
-            EndDate = dto.EndDate,
+            StartDate = NormalizeUtc(dto.StartDate),
+            EndDate = dto.EndDate.HasValue
+                ? NormalizeUtc(dto.EndDate.Value)
+                : null,
+            DayMonth = string.IsNullOrWhiteSpace(dto.DayMonth)
+                ? dto.StartDate.ToString("dd/MM")
+                : dto.DayMonth.Trim(),
             Workload = string.IsNullOrWhiteSpace(dto.Workload)
                 ? "4 horas"
                 : dto.Workload.Trim(),
@@ -219,10 +224,10 @@ public class EventsController : ControllerBase
             ev.Modality = dto.Modality.Trim();
 
         if (dto.StartDate.HasValue)
-            ev.StartDate = dto.StartDate.Value;
+            ev.StartDate = NormalizeUtc(dto.StartDate.Value);
 
         if (dto.EndDate.HasValue)
-            ev.EndDate = dto.EndDate.Value;
+            ev.EndDate = NormalizeUtc(dto.EndDate.Value);
 
         if (!string.IsNullOrWhiteSpace(dto.Workload))
             ev.Workload = dto.Workload.Trim();
@@ -341,6 +346,16 @@ public class EventsController : ControllerBase
         return Ok(
             ApiResponse<DashboardStatsDto>.Ok(stats)
         );
+    }
+
+    private static DateTime NormalizeUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 
     private static EventResponseDto MapToEventResponseDto(Event e)
