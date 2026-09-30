@@ -45,6 +45,10 @@ public class User
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public bool EmailConfirmed { get; set; } = false;
+
+    public DateTime? EmailConfirmedAt { get; set; }
+
     public DateTime? UpdatedAt { get; set; }
 
     public ICollection<Registration> Registrations { get; set; } = new List<Registration>();
@@ -54,4 +58,6 @@ public class User
     public ICollection<Certificate> Certificates { get; set; } = new List<Certificate>();
 
     public ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
+
+    public ICollection<PasswordResetToken> PasswordResetTokens { get; set; } = new List<PasswordResetToken>();
 }

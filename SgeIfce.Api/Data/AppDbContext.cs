@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<Registration> Registrations => Set<Registration>();
@@ -42,6 +43,29 @@ public class AppDbContext : DbContext
                 .HasDatabaseName("IX_users_Siape");
 
             // O banco atual não possui DEFAULT para Role.
+        });
+
+        // ============================================================
+        // PASSWORD RESET TOKENS
+        // ============================================================
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.ToTable("password_reset_tokens");
+
+            entity.HasKey(t => t.Id);
+
+            entity.HasIndex(t => t.UserId)
+                .HasDatabaseName("IX_password_reset_tokens_UserId");
+
+            entity.HasIndex(t => t.TokenHash)
+                .IsUnique()
+                .HasDatabaseName("IX_password_reset_tokens_TokenHash");
+
+            entity.HasOne(t => t.User)
+                .WithMany(u => u.PasswordResetTokens)
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ============================================================

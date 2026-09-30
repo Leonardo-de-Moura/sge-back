@@ -16,15 +16,24 @@ public class AuthController : ControllerBase
     private readonly AppDbContext _context;
     private readonly ITokenService _tokenService;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IEmailService _emailService;
+    private readonly IPasswordResetService _passwordResetService;
+    private readonly IConfiguration _configuration;
 
     public AuthController(
         AppDbContext context,
         ITokenService tokenService,
-        IPasswordHasher passwordHasher)
+        IPasswordHasher passwordHasher,
+        IEmailService emailService,
+        IPasswordResetService passwordResetService,
+        IConfiguration configuration)
     {
         _context = context;
         _tokenService = tokenService;
         _passwordHasher = passwordHasher;
+        _emailService = emailService;
+        _passwordResetService = passwordResetService;
+        _configuration = configuration;
     }
 
     [HttpPost("login")]
@@ -134,12 +143,17 @@ public class AuthController : ControllerBase
             PasswordHash = _passwordHasher.Hash(dto.Password),
             Role = "Aluno",
             Matricula = dto.Matricula.Trim(),
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = false
         };
 
         _context.Users.Add(user);
 
         await _context.SaveChangesAsync();
+
+        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+        var confirmationLink = $"{frontendUrl.TrimEnd('/')}/login/aluno?confirmed=1";
+        await _emailService.SendAccountConfirmationAsync(user.Email, confirmationLink);
 
         var profile = new UserProfileDto
         {
@@ -200,12 +214,17 @@ public class AuthController : ControllerBase
             PasswordHash = _passwordHasher.Hash(dto.Password),
             Role = "Professor",
             Siape = dto.Siape.Trim(),
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = false
         };
 
         _context.Users.Add(user);
 
         await _context.SaveChangesAsync();
+
+        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+        var confirmationLink = $"{frontendUrl.TrimEnd('/')}/login/professor?confirmed=1";
+        await _emailService.SendAccountConfirmationAsync(user.Email, confirmationLink);
 
         var profile = new UserProfileDto
         {
@@ -271,14 +290,138 @@ public class AuthController : ControllerBase
 
     [HttpPost("forgot-password")]
     [AllowAnonymous]
-    public ActionResult<ApiResponse<object>> ForgotPassword(
+    public async Task<ActionResult<ApiResponse<object>>> ForgotPassword(
         [FromBody] ForgotPasswordDto dto)
     {
+        if (!ModelState.IsValid)
+        {
+            var errors = ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .ToList();
+
+            return BadRequest(
+                ApiResponse<object>.Fail(
+                    "Dados inválidos.",
+                    errors
+                )
+            );
+        }
+
+        var normalizedEmail = dto.Email.Trim();
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail.ToLower());
+
+        if (user != null)
+        {
+            var token = await _passwordResetService.CreateTokenAsync(user);
+            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+            var resetLink = $"{frontendUrl.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(token)}";
+
+            await _emailService.SendPasswordResetAsync(user.Email, resetLink);
+        }
+
         return Ok(
             ApiResponse<object>.Ok(
                 null,
-                "Se o e-mail informado estiver cadastrado, as instruções de recuperação foram enviadas."
+                "Se o e-mail estiver cadastrado, enviaremos instruções para recuperação da senha."
             )
         );
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<object>>> ResetPassword(
+        [FromBody] ResetPasswordDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            var errors = ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .ToList();
+
+            return BadRequest(
+                ApiResponse<object>.Fail(
+                    "Dados de redefinição inválidos.",
+                    errors
+                )
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Token))
+        {
+            return BadRequest(
+                ApiResponse<object>.Fail(
+                    "Token inválido.",
+                    "O token de redefinição é obrigatório."
+                )
+            );
+        }
+
+        if (!IsPasswordValid(dto.NewPassword))
+        {
+            return BadRequest(
+                ApiResponse<object>.Fail(
+                    "Senha inválida.",
+                    "A senha deve ter no mínimo 8 caracteres, com letras e números."
+                )
+            );
+        }
+
+        if (dto.NewPassword != dto.ConfirmPassword)
+        {
+            return BadRequest(
+                ApiResponse<object>.Fail(
+                    "Confirmação de senha inválida.",
+                    "As senhas digitadas não coincidem."
+                )
+            );
+        }
+
+        var (user, token) = await _passwordResetService.ValidateTokenAsync(dto.Token);
+
+        if (user == null || token == null)
+        {
+            return BadRequest(
+                ApiResponse<object>.Fail(
+                    "Token inválido ou expirado.",
+                    "O link de redefinição não é mais válido."
+                )
+            );
+        }
+
+        if (token.UsedAt.HasValue || token.ExpiresAt <= DateTime.UtcNow)
+        {
+            return BadRequest(
+                ApiResponse<object>.Fail(
+                    "Token inválido ou expirado.",
+                    "Este token já foi utilizado ou expirou."
+                )
+            );
+        }
+
+        user.PasswordHash = _passwordHasher.Hash(dto.NewPassword);
+        token.UsedAt = DateTime.UtcNow;
+
+        await _passwordResetService.InvalidateUserTokensAsync(user.Id);
+        await _context.SaveChangesAsync();
+
+        return Ok(
+            ApiResponse<object>.Ok(
+                null,
+                "Senha redefinida com sucesso."
+            )
+        );
+    }
+
+    private static bool IsPasswordValid(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+        {
+            return false;
+        }
+
+        return password.Any(char.IsLetter) && password.Any(char.IsDigit);
     }
 }
