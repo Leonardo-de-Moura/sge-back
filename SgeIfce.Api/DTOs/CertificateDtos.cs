@@ -37,3 +37,16 @@ public class IssueResultDto
     public int TotalIssued { get; set; }
     public List<string> IssuedCodes { get; set; } = new();
 }
+
+public class CertificateDetailDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string EventId { get; set; } = string.Empty;
+    public string EventTitle { get; set; } = string.Empty;
+    public string ParticipantName { get; set; } = string.Empty;
+    public string ParticipantEmail { get; set; } = string.Empty;
+    public string Workload { get; set; } = string.Empty;
+    public string ValidationCode { get; set; } = string.Empty;
+    public string IssueDate { get; set; } = string.Empty;
+    public string Institution { get; set; } = "Instituto Federal do Ceará - IFCE Campus Cedro";
+}

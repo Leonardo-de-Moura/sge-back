@@ -98,3 +98,18 @@ public class DashboardStatsDto
     public int IssuedCertificatesCount { get; set; }
     public int PendingCertificatesCount { get; set; }
 }
+
+public class GenerateQrCodeRequestDto
+{
+    public bool ForceGenerate { get; set; }
+}
+
+public class EventQrCodeResponseDto
+{
+    public string EventId { get; set; } = string.Empty;
+    public string EventTitle { get; set; } = string.Empty;
+    public string Token { get; set; } = string.Empty;
+    public DateTime GeneratedAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public bool IsActive { get; set; }
+}

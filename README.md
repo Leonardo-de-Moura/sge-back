@@ -10,7 +10,7 @@ API RESTful oficial do **Sistema de Gestão de Eventos (SGE)** do **Instituto Fe
 - **Entity Framework Core 8** (Code-First com suporte a SQLite e PostgreSQL)
 - **BCrypt.Net-Next** (Hashing seguro de senhas)
 - **System.IdentityModel.Tokens.Jwt** (Autenticação JWT Bearer)
-- **QuestPDF** / Canvas PDF (Emissão de certificados autenticados)
+- **PDF vetorial** (certificado A4 horizontal no padrão visual IFCE, com moldura verde/vermelha, marca institucional, assinatura do organizador e código verificador)
 - **Swagger / OpenAPI** com autorização Bearer integrada
 - **Docker & Docker Compose**
 
@@ -121,3 +121,13 @@ Para adicionar novas origens em produção, configure a variável de ambiente:
 ```bash
 Cors__AllowedOrigins__0=https://meu-frontend.vercel.app
 ```
+
+## 📱 Check-in por QR Code
+
+O professor autenticado gera o QR Code do evento por `POST /api/events/{eventId}/qrcode`.
+O código abre a rota `/aluno/check-in` do frontend, onde o aluno autenticado confirma a
+presença. A API recebe o token em `POST /api/attendance/check-in`; o token deve estar
+ativo e o aluno precisa ter inscrição no evento. As colunas do QR Code são aplicadas
+automaticamente pela migration na inicialização da API.
+O endereço de check-in usa a origem atual do frontend, sem exigir uma configuração
+adicional específica para QR Code.

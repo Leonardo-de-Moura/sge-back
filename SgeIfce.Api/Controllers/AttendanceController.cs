@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +9,7 @@ namespace SgeIfce.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Professor")]
+[Authorize]
 public class AttendanceController : ControllerBase
 {
     private readonly AppDbContext _context;
@@ -19,6 +20,7 @@ public class AttendanceController : ControllerBase
     }
 
     [HttpGet("event/{eventId}")]
+    [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<List<ParticipantAttendanceDto>>>> GetAttendancesByEvent(string eventId)
     {
         var attendances = await _context.Attendances
@@ -44,6 +46,7 @@ public class AttendanceController : ControllerBase
     }
 
     [HttpPatch("{id}")]
+    [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<ParticipantAttendanceDto>>> UpdateStatus(string id, [FromBody] UpdateAttendanceDto dto)
     {
         var attendance = await _context.Attendances
@@ -85,6 +88,7 @@ public class AttendanceController : ControllerBase
     }
 
     [HttpPost("bulk")]
+    [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<object>>> BulkUpdate([FromBody] BulkAttendanceDto dto)
     {
         if (dto.Attendances == null || !dto.Attendances.Any())
@@ -143,5 +147,112 @@ public class AttendanceController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(ApiResponse<object>.Ok(null, "Presenças salvas com sucesso!"));
+    }
+
+    [HttpPost("check-in")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<CheckInResponseDto>>> CheckIn([FromBody] CheckInRequestDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Token))
+        {
+            return BadRequest(ApiResponse<CheckInResponseDto>.Fail("O token do QR Code é obrigatório."));
+        }
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(ApiResponse<CheckInResponseDto>.Fail("Sessão expirada. Faça login novamente."));
+        }
+
+        var eventEntity = await _context.Events
+            .FirstOrDefaultAsync(e => e.QrCodeToken == dto.Token.Trim() && e.QrCodeExpiresAt.HasValue && e.QrCodeExpiresAt > DateTime.UtcNow);
+
+        if (eventEntity == null)
+        {
+            return BadRequest(ApiResponse<CheckInResponseDto>.Fail(
+                "Código QR inválido, expirado ou não encontrado.",
+                "Código QR inválido, expirado ou não encontrado."
+            ));
+        }
+
+        var registration = await _context.Registrations
+            .FirstOrDefaultAsync(r =>
+                r.EventId == eventEntity.Id &&
+                r.UserId == userId &&
+                r.Status == "confirmado");
+
+        if (registration == null)
+        {
+            return BadRequest(ApiResponse<CheckInResponseDto>.Fail(
+                "Você não está inscrito neste evento para confirmar presença.",
+                "Participante sem inscrição válida no evento."
+            ));
+        }
+
+        var attendance = await _context.Attendances
+            .FirstOrDefaultAsync(a => a.EventId == eventEntity.Id && a.UserId == userId);
+
+        if (attendance == null)
+        {
+            attendance = new Models.Attendance
+            {
+                Id = Guid.NewGuid().ToString(),
+                EventId = eventEntity.Id,
+                UserId = userId,
+                ParticipantName = User.Identity?.Name ?? "Participante",
+                ParticipantEmail = User.FindFirstValue(ClaimTypes.Email) ?? string.Empty,
+                Matricula = string.Empty,
+                Status = "presente",
+                CheckedInAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                CertificateIssued = false
+            };
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null)
+            {
+                attendance.ParticipantName = user.Name;
+                attendance.ParticipantEmail = user.Email;
+                attendance.Matricula = user.Matricula ?? string.Empty;
+            }
+
+            _context.Attendances.Add(attendance);
+            await _context.SaveChangesAsync();
+
+            return Ok(ApiResponse<CheckInResponseDto>.Ok(new CheckInResponseDto
+            {
+                EventId = eventEntity.Id,
+                EventTitle = eventEntity.Title,
+                Status = "presente",
+                CheckedInAt = attendance.CheckedInAt ?? DateTime.UtcNow,
+                AlreadyRegistered = false
+            }, "Presença confirmada com sucesso!"));
+        }
+
+        if (attendance.Status == "presente")
+        {
+            return Ok(ApiResponse<CheckInResponseDto>.Ok(new CheckInResponseDto
+            {
+                EventId = eventEntity.Id,
+                EventTitle = eventEntity.Title,
+                Status = "presente",
+                CheckedInAt = attendance.CheckedInAt ?? DateTime.UtcNow,
+                AlreadyRegistered = true
+            }, "Esta presença já havia sido registrada."));
+        }
+
+        attendance.Status = "presente";
+        attendance.CheckedInAt = attendance.CheckedInAt ?? DateTime.UtcNow;
+        attendance.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(ApiResponse<CheckInResponseDto>.Ok(new CheckInResponseDto
+        {
+            EventId = eventEntity.Id,
+            EventTitle = eventEntity.Title,
+            Status = "presente",
+            CheckedInAt = attendance.CheckedInAt ?? DateTime.UtcNow,
+            AlreadyRegistered = false
+        }, "Presença confirmada com sucesso!"));
     }
 }

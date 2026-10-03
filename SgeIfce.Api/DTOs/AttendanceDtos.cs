@@ -38,3 +38,18 @@ public class BulkAttendanceDto
     [Required]
     public List<BulkAttendanceItemDto> Attendances { get; set; } = new();
 }
+
+public class CheckInRequestDto
+{
+    [Required(ErrorMessage = "O token do QR Code é obrigatório.")]
+    public string Token { get; set; } = string.Empty;
+}
+
+public class CheckInResponseDto
+{
+    public string EventId { get; set; } = string.Empty;
+    public string EventTitle { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime CheckedInAt { get; set; }
+    public bool AlreadyRegistered { get; set; }
+}

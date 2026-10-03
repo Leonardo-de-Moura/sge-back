@@ -53,6 +53,38 @@ public class CertificatesController : ControllerBase
         return Ok(ApiResponse<List<CertificateResponseDto>>.Ok(result));
     }
 
+    [HttpGet("{id}")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<CertificateDetailDto>>> GetCertificateById(string id)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        var cert = await _context.Certificates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (cert == null)
+        {
+            return NotFound(ApiResponse<CertificateDetailDto>.Fail("Certificado não encontrado."));
+        }
+
+        if (!User.IsInRole("Professor") && !string.Equals(cert.UserId, userIdClaim, StringComparison.Ordinal))
+        {
+            return Forbid();
+        }
+
+        return Ok(ApiResponse<CertificateDetailDto>.Ok(new CertificateDetailDto
+        {
+            Id = cert.Id,
+            EventId = cert.EventId,
+            EventTitle = cert.EventTitle,
+            ParticipantName = cert.ParticipantName,
+            ParticipantEmail = cert.ParticipantEmail,
+            Workload = cert.Workload,
+            ValidationCode = cert.ValidationCode,
+            IssueDate = cert.IssueDate.ToString("dd/MM/yyyy")
+        }, "Certificado consultado com sucesso."));
+    }
+
     [HttpGet("validate/{code}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ValidateCertificateDto>>> ValidateCertificate(string code)
@@ -156,19 +188,35 @@ public class CertificatesController : ControllerBase
         return Ok(ApiResponse<IssueResultDto>.Ok(result, $"{result.TotalIssued} certificados emitidos com sucesso!"));
     }
 
-    [HttpGet("{id}/download")]
+    [HttpGet("{id}/pdf")]
     [Authorize]
     public async Task<IActionResult> DownloadCertificatePdf(string id)
     {
-        var cert = await _context.Certificates.FindAsync(id);
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        var cert = await _context.Certificates
+            .Include(c => c.Event)
+                .ThenInclude(e => e!.Organizer)
+            .FirstOrDefaultAsync(c => c.Id == id);
         if (cert == null)
         {
             return NotFound(ApiResponse<object>.Fail("Certificado não encontrado."));
+        }
+
+        if (!User.IsInRole("Professor") && !string.Equals(cert.UserId, userIdClaim, StringComparison.Ordinal))
+        {
+            return Forbid();
         }
 
         var pdfBytes = _pdfService.GeneratePdf(cert);
         var filename = $"Certificado-IFCE-{cert.ValidationCode}.pdf";
 
         return File(pdfBytes, "application/pdf", filename);
+    }
+
+    [HttpGet("{id}/download")]
+    [Authorize]
+    public async Task<IActionResult> DownloadCertificatePdfLegacy(string id)
+    {
+        return await DownloadCertificatePdf(id);
     }
 }

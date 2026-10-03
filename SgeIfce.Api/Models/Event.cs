@@ -51,6 +51,13 @@ public class Event
     [MaxLength(500)]
     public string? ImageUrl { get; set; }
 
+    [MaxLength(255)]
+    public string? QrCodeToken { get; set; }
+
+    public DateTime? QrCodeGeneratedAt { get; set; }
+
+    public DateTime? QrCodeExpiresAt { get; set; }
+
     [MaxLength(64)]
     public string? OrganizerId { get; set; }
 

@@ -103,6 +103,106 @@ public class EventsController : ControllerBase
         );
     }
 
+    [HttpGet("{eventId}/qrcode")]
+    [Authorize(Roles = "Professor")]
+    public async Task<ActionResult<ApiResponse<EventQrCodeResponseDto>>> GetEventQrCode(string eventId)
+    {
+        var ev = await _context.Events
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (ev == null)
+        {
+            return NotFound(ApiResponse<EventQrCodeResponseDto>.Fail("Evento não encontrado."));
+        }
+
+        if (string.IsNullOrWhiteSpace(ev.QrCodeToken) || !ev.QrCodeExpiresAt.HasValue || ev.QrCodeExpiresAt <= DateTime.UtcNow)
+        {
+            return NotFound(ApiResponse<EventQrCodeResponseDto>.Fail("Nenhum QR Code ativo foi gerado para este evento."));
+        }
+
+        return Ok(ApiResponse<EventQrCodeResponseDto>.Ok(new EventQrCodeResponseDto
+        {
+            EventId = ev.Id,
+            EventTitle = ev.Title,
+            Token = ev.QrCodeToken,
+            GeneratedAt = ev.QrCodeGeneratedAt ?? DateTime.UtcNow,
+            ExpiresAt = ev.QrCodeExpiresAt.Value,
+            IsActive = true
+        }, "QR Code ativo encontrado."));
+    }
+
+    [HttpPost("{eventId}/qrcode")]
+    [Authorize(Roles = "Professor")]
+    public async Task<ActionResult<ApiResponse<EventQrCodeResponseDto>>> GenerateEventQrCode(string eventId, [FromBody] GenerateQrCodeRequestDto? dto)
+    {
+        var ev = await _context.Events
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (ev == null)
+        {
+            return NotFound(ApiResponse<EventQrCodeResponseDto>.Fail("Evento não encontrado."));
+        }
+
+        var forceGenerate = dto?.ForceGenerate == true;
+        var shouldRegenerate = forceGenerate ||
+            string.IsNullOrWhiteSpace(ev.QrCodeToken) ||
+            !ev.QrCodeExpiresAt.HasValue ||
+            ev.QrCodeExpiresAt <= DateTime.UtcNow;
+
+        if (shouldRegenerate)
+        {
+            ev.QrCodeToken = CreateSecureToken();
+            ev.QrCodeGeneratedAt = DateTime.UtcNow;
+            ev.QrCodeExpiresAt = DateTime.UtcNow.AddHours(12);
+            await _context.SaveChangesAsync();
+        }
+
+        var response = new EventQrCodeResponseDto
+        {
+            EventId = ev.Id,
+            EventTitle = ev.Title,
+            Token = ev.QrCodeToken ?? string.Empty,
+            GeneratedAt = ev.QrCodeGeneratedAt ?? DateTime.UtcNow,
+            ExpiresAt = ev.QrCodeExpiresAt ?? DateTime.UtcNow.AddHours(12),
+            IsActive = true
+        };
+
+        return Ok(ApiResponse<EventQrCodeResponseDto>.Ok(response, "QR Code atualizado com sucesso."));
+    }
+
+    [HttpGet("{eventId}/attendance")]
+    [Authorize(Roles = "Professor")]
+    public async Task<ActionResult<ApiResponse<List<ParticipantAttendanceDto>>>> GetEventAttendance(string eventId)
+    {
+        var eventExists = await _context.Events.AnyAsync(e => e.Id == eventId);
+        if (!eventExists)
+        {
+            return NotFound(ApiResponse<List<ParticipantAttendanceDto>>.Fail("Evento não encontrado."));
+        }
+
+        var attendances = await _context.Attendances
+            .Include(a => a.User)
+            .Where(a => a.EventId == eventId)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var result = attendances.Select(a => new ParticipantAttendanceDto
+        {
+            Id = a.Id,
+            UserId = a.UserId,
+            Name = a.User?.Name ?? a.ParticipantName,
+            Email = a.User?.Email ?? a.ParticipantEmail,
+            Matricula = a.User?.Matricula ?? a.Matricula,
+            Status = a.Status,
+            CertificateIssued = a.CertificateIssued,
+            AvatarUrl = a.User?.AvatarUrl,
+            CheckedInAt = a.CheckedInAt
+        }).ToList();
+
+        return Ok(ApiResponse<List<ParticipantAttendanceDto>>.Ok(result));
+    }
+
     [HttpPost]
     [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<EventResponseDto>>> CreateEvent(
@@ -521,6 +621,11 @@ public class EventsController : ControllerBase
                 await _database.CloseConnectionAsync();
             }
         }
+    }
+
+    private static string CreateSecureToken()
+    {
+        return Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
     }
 
     private static EventResponseDto MapToEventResponseDto(Event e)
