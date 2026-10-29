@@ -6,6 +6,11 @@ namespace SgeIfce.Api.Middleware;
 
 public class GlobalExceptionMiddleware
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private readonly RequestDelegate _next;
     private readonly ILogger<GlobalExceptionMiddleware> _logger;
 
@@ -25,13 +30,13 @@ public class GlobalExceptionMiddleware
             {
                 context.Response.ContentType = "application/json";
                 var response = ApiResponse<object>.Fail("Acesso não autorizado.", "Token JWT ausente, inválido ou expirado.");
-                await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+                await context.Response.WriteAsync(JsonSerializer.Serialize(response, JsonOptions));
             }
             else if (context.Response.StatusCode == (int)HttpStatusCode.Forbidden && !context.Response.HasStarted)
             {
                 context.Response.ContentType = "application/json";
                 var response = ApiResponse<object>.Fail("Acesso negado.", "Seu perfil não possui permissão para este recurso.");
-                await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+                await context.Response.WriteAsync(JsonSerializer.Serialize(response, JsonOptions));
             }
         }
         catch (Exception ex)
@@ -56,10 +61,7 @@ public class GlobalExceptionMiddleware
             exception.Message
         );
 
-        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        var json = JsonSerializer.Serialize(response, JsonOptions);
 
         await context.Response.WriteAsync(json);
     }
