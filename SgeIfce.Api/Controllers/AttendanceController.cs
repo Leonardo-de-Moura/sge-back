@@ -164,6 +164,34 @@ public class AttendanceController : ControllerBase
             return Unauthorized(ApiResponse<CheckInResponseDto>.Fail("Sessão expirada. Faça login novamente."));
         }
 
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            return Unauthorized(ApiResponse<CheckInResponseDto>.Fail("Usuário não autenticado."));
+        }
+
+        if (!string.Equals(user.Role, "Aluno", StringComparison.OrdinalIgnoreCase))
+        {
+            return Forbid();
+        }
+
+        var normalizedName = string.Join(' ', dto.Name.Trim().Split(
+            (char[]?)null,
+            StringSplitOptions.RemoveEmptyEntries
+        ));
+        var accountName = string.Join(' ', user.Name.Trim().Split(
+            (char[]?)null,
+            StringSplitOptions.RemoveEmptyEntries
+        ));
+
+        if (!string.Equals(dto.Email.Trim(), user.Email, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(normalizedName, accountName, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(ApiResponse<CheckInResponseDto>.Fail(
+                "Os dados informados devem corresponder à conta usada no login."
+            ));
+        }
+
         var eventEntity = await _context.Events
             .FirstOrDefaultAsync(e => e.QrCodeToken == dto.Token.Trim() && e.QrCodeExpiresAt.HasValue && e.QrCodeExpiresAt > DateTime.UtcNow);
 
@@ -208,13 +236,9 @@ public class AttendanceController : ControllerBase
                 CertificateIssued = false
             };
 
-            var user = await _context.Users.FindAsync(userId);
-            if (user != null)
-            {
-                attendance.ParticipantName = user.Name;
-                attendance.ParticipantEmail = user.Email;
-                attendance.Matricula = user.Matricula ?? string.Empty;
-            }
+            attendance.ParticipantName = user.Name;
+            attendance.ParticipantEmail = user.Email;
+            attendance.Matricula = user.Matricula ?? string.Empty;
 
             _context.Attendances.Add(attendance);
             await _context.SaveChangesAsync();

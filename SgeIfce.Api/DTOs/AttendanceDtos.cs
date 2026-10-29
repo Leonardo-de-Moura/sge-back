@@ -43,6 +43,13 @@ public class CheckInRequestDto
 {
     [Required(ErrorMessage = "O token do QR Code é obrigatório.")]
     public string Token { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "O nome informado é obrigatório.")]
+    public string Name { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "O e-mail informado é obrigatório.")]
+    [EmailAddress(ErrorMessage = "Informe um e-mail válido.")]
+    public string Email { get; set; } = string.Empty;
 }
 
 public class CheckInResponseDto
