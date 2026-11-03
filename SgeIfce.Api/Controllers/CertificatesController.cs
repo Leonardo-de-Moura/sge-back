@@ -59,6 +59,7 @@ public class CertificatesController : ControllerBase
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         var cert = await _context.Certificates
+            .Include(c => c.Event)
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
 
@@ -67,7 +68,14 @@ public class CertificatesController : ControllerBase
             return NotFound(ApiResponse<CertificateDetailDto>.Fail("Certificado não encontrado."));
         }
 
-        if (!User.IsInRole("Professor") && !string.Equals(cert.UserId, userIdClaim, StringComparison.Ordinal))
+        if (User.IsInRole("Professor"))
+        {
+            if (!string.Equals(cert.Event?.OrganizerId, userIdClaim, StringComparison.Ordinal))
+            {
+                return NotFound(ApiResponse<CertificateDetailDto>.Fail("Certificado não encontrado."));
+            }
+        }
+        else if (!string.Equals(cert.UserId, userIdClaim, StringComparison.Ordinal))
         {
             return Forbid();
         }
@@ -120,7 +128,11 @@ public class CertificatesController : ControllerBase
     [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<IssueResultDto>>> IssueCertificates([FromBody] IssueCertificateDto dto)
     {
-        var ev = await _context.Events.FindAsync(dto.EventId);
+        var userId = GetCurrentUserId();
+        var ev = string.IsNullOrWhiteSpace(userId)
+            ? null
+            : await _context.Events.FirstOrDefaultAsync(e =>
+                e.Id == dto.EventId && e.OrganizerId == userId);
         if (ev == null)
         {
             return NotFound(ApiResponse<IssueResultDto>.Fail("Evento não encontrado."));
@@ -202,7 +214,14 @@ public class CertificatesController : ControllerBase
             return NotFound(ApiResponse<object>.Fail("Certificado não encontrado."));
         }
 
-        if (!User.IsInRole("Professor") && !string.Equals(cert.UserId, userIdClaim, StringComparison.Ordinal))
+        if (User.IsInRole("Professor"))
+        {
+            if (!string.Equals(cert.Event?.OrganizerId, userIdClaim, StringComparison.Ordinal))
+            {
+                return NotFound(ApiResponse<object>.Fail("Certificado não encontrado."));
+            }
+        }
+        else if (!string.Equals(cert.UserId, userIdClaim, StringComparison.Ordinal))
         {
             return Forbid();
         }
@@ -219,4 +238,7 @@ public class CertificatesController : ControllerBase
     {
         return await DownloadCertificatePdf(id);
     }
+
+    private string? GetCurrentUserId() =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
 }

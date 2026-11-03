@@ -127,6 +127,10 @@ namespace SgeIfce.Api.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("IX_attendances_UserId");
 
+                    b.HasIndex("EventId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_attendances_EventId_UserId");
+
                     b.ToTable("attendances", (string)null);
                 });
 
@@ -379,6 +383,11 @@ namespace SgeIfce.Api.Migrations
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("IX_registrations_UserId");
+
+                    b.HasIndex("UserId", "EventId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_registrations_UserId_EventId_Active")
+                        .HasFilter("\"Status\" = 'confirmado'");
 
                     b.ToTable("registrations", (string)null);
                 });

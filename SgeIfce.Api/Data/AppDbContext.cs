@@ -126,6 +126,11 @@ public class AppDbContext : DbContext
                 .IsUnique()
                 .HasDatabaseName("IX_registrations_TicketCode");
 
+            entity.HasIndex(r => new { r.UserId, r.EventId })
+                .IsUnique()
+                .HasFilter("\"Status\" = 'confirmado'")
+                .HasDatabaseName("IX_registrations_UserId_EventId_Active");
+
             entity.HasOne(r => r.User)
                 .WithMany(u => u.Registrations)
                 .HasForeignKey(r => r.UserId)
@@ -152,6 +157,10 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(a => a.UserId)
                 .HasDatabaseName("IX_attendances_UserId");
+
+            entity.HasIndex(a => new { a.EventId, a.UserId })
+                .IsUnique()
+                .HasDatabaseName("IX_attendances_EventId_UserId");
 
             entity.HasOne(a => a.Event)
                 .WithMany(e => e.Attendances)

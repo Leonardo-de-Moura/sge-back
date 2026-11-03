@@ -36,9 +36,8 @@ public class RegistrationsController : ControllerBase
             return Unauthorized(ApiResponse<RegistrationResponseDto>.Fail("Usuário não autenticado."));
         }
 
-        var ev = await _context.Events
-            .Include(e => e.Registrations)
-            .FirstOrDefaultAsync(e => e.Id == dto.EventId);
+        await using var eventLock = await PostgresEventLock.AcquireAsync(_context, dto.EventId);
+        var ev = await _context.Events.FirstOrDefaultAsync(e => e.Id == dto.EventId);
 
         if (ev == null)
         {
@@ -47,11 +46,16 @@ public class RegistrationsController : ControllerBase
 
         if (ev.Status == "Encerrado")
         {
-            return BadRequest(ApiResponse<RegistrationResponseDto>.Fail("Este evento já foi encerrado."));
+            return Conflict(ApiResponse<RegistrationResponseDto>.Fail("Este evento já foi encerrado."));
         }
 
-        var existingReg = ev.Registrations.FirstOrDefault(r => r.UserId == userId && r.Status == "confirmado");
-        if (existingReg != null)
+        var existingRegistration = await _context.Registrations
+            .Where(r => r.UserId == userId && r.EventId == ev.Id)
+            .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id)
+            .FirstOrDefaultAsync();
+
+        if (existingRegistration?.Status == "confirmado")
         {
             return Conflict(ApiResponse<RegistrationResponseDto>.Fail(
                 "Inscrição já realizada.",
@@ -59,45 +63,65 @@ public class RegistrationsController : ControllerBase
             ));
         }
 
-        var enrolledCount = ev.Registrations.Count(r => r.Status == "confirmado");
+        if (existingRegistration != null && existingRegistration.Status != "cancelado")
+        {
+            return Conflict(ApiResponse<RegistrationResponseDto>.Fail(
+                "A inscrição existente possui um status que não permite nova inscrição."
+            ));
+        }
+
+        var enrolledCount = await _context.Registrations.CountAsync(
+            r => r.EventId == ev.Id && r.Status == "confirmado");
+        ev.EnrolledSlots = enrolledCount;
+
         if (enrolledCount >= ev.TotalSlots)
         {
-            return BadRequest(ApiResponse<RegistrationResponseDto>.Fail(
+            await _context.SaveChangesAsync();
+            return Conflict(ApiResponse<RegistrationResponseDto>.Fail(
                 "Evento esgotado.",
                 "Todas as vagas para este evento já foram preenchidas."
             ));
         }
 
-        var ticketCode = $"SGE-{ev.Category.Substring(0, Math.Min(3, ev.Category.Length)).ToUpper()}-{Random.Shared.Next(10000, 99999)}";
-
-        var reg = new Registration
+        var now = DateTime.UtcNow;
+        var reg = existingRegistration ?? new Registration
         {
             Id = Guid.NewGuid().ToString(),
             UserId = userId,
             EventId = ev.Id,
             EventTitle = ev.Title,
-            RegistrationDate = DateTime.UtcNow,
-            TicketCode = ticketCode,
-            Status = "confirmado",
-            CreatedAt = DateTime.UtcNow
+            RegistrationDate = now,
+            TicketCode = $"SGE-{ev.Category.Substring(0, Math.Min(3, ev.Category.Length)).ToUpper()}-{Random.Shared.Next(10000, 99999)}",
+            CreatedAt = now
         };
 
-        // Automatic attendance record creation
-        var attendance = new Attendance
+        if (existingRegistration == null)
         {
-            Id = Guid.NewGuid().ToString(),
-            EventId = ev.Id,
-            UserId = userId,
-            ParticipantName = user.Name,
-            ParticipantEmail = user.Email,
-            Matricula = user.Matricula ?? string.Empty,
-            Status = "pendente",
-            CertificateIssued = false,
-            CreatedAt = DateTime.UtcNow
-        };
+            _context.Registrations.Add(reg);
+        }
 
-        _context.Registrations.Add(reg);
-        _context.Attendances.Add(attendance);
+        reg.Status = "confirmado";
+        reg.UpdatedAt = existingRegistration == null ? null : now;
+
+        var attendance = await _context.Attendances
+            .FirstOrDefaultAsync(a => a.EventId == ev.Id && a.UserId == userId);
+        if (attendance == null)
+        {
+            _context.Attendances.Add(new Attendance
+            {
+                Id = Guid.NewGuid().ToString(),
+                EventId = ev.Id,
+                UserId = userId,
+                ParticipantName = user.Name,
+                ParticipantEmail = user.Email,
+                Matricula = user.Matricula ?? string.Empty,
+                Status = "pendente",
+                CertificateIssued = false,
+                CreatedAt = now
+            });
+        }
+
+        ev.EnrolledSlots = enrolledCount + 1;
         await _context.SaveChangesAsync();
 
         var response = new RegistrationResponseDto
@@ -152,11 +176,17 @@ public class RegistrationsController : ControllerBase
     [HttpGet("{id}/ticket")]
     public async Task<ActionResult<ApiResponse<TicketDto>>> GetTicket(string id)
     {
+        var userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(ApiResponse<TicketDto>.Fail("Usuário não autenticado."));
+        }
+
         var reg = await _context.Registrations
             .Include(r => r.Event)
             .Include(r => r.User)
             .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == id);
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
 
         if (reg == null)
         {
@@ -190,6 +220,17 @@ public class RegistrationsController : ControllerBase
     public async Task<ActionResult<ApiResponse<RegistrationResponseDto>>> CancelRegistration(string id)
     {
         var userId = GetCurrentUserId();
+        var registrationEventId = await _context.Registrations
+            .Where(r => r.Id == id && r.UserId == userId)
+            .Select(r => r.EventId)
+            .FirstOrDefaultAsync();
+
+        if (registrationEventId == null)
+        {
+            return NotFound(ApiResponse<RegistrationResponseDto>.Fail("Inscrição não encontrada."));
+        }
+
+        await using var eventLock = await PostgresEventLock.AcquireAsync(_context, registrationEventId);
         var reg = await _context.Registrations
             .Include(r => r.Event)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
@@ -204,7 +245,15 @@ public class RegistrationsController : ControllerBase
             return BadRequest(ApiResponse<RegistrationResponseDto>.Fail("Esta inscrição já se encontra cancelada."));
         }
 
+        if (reg.Status != "confirmado")
+        {
+            return Conflict(ApiResponse<RegistrationResponseDto>.Fail(
+                "A inscrição não está em um estado que permita cancelamento."
+            ));
+        }
+
         reg.Status = "cancelado";
+        reg.UpdatedAt = DateTime.UtcNow;
 
         // Atualiza a presença correspondente se houver
         var attendance = await _context.Attendances.FirstOrDefaultAsync(a =>
@@ -212,6 +261,15 @@ public class RegistrationsController : ControllerBase
         if (attendance != null)
         {
             attendance.Status = "ausente";
+            attendance.UpdatedAt = reg.UpdatedAt;
+        }
+
+        if (reg.Event != null)
+        {
+            reg.Event.EnrolledSlots = await _context.Registrations.CountAsync(r =>
+                r.EventId == reg.EventId &&
+                r.Status == "confirmado" &&
+                r.Id != reg.Id);
         }
 
         await _context.SaveChangesAsync();

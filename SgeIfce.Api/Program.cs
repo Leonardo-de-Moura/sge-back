@@ -57,14 +57,7 @@ builder.Services.AddScoped<ICertificatePdfService, CertificatePdfService>();
 // 3. CONFIGURAÇÃO DE AUTENTICAÇÃO JWT
 // ============================================================
 
-var jwtSecretKey = builder.Configuration["Jwt:SecretKey"];
-
-if (string.IsNullOrWhiteSpace(jwtSecretKey))
-{
-    throw new InvalidOperationException(
-        "Jwt:SecretKey não foi configurada."
-    );
-}
+var jwtSecretKey = JwtSecretKey.GetRequired(builder.Configuration);
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SgeIfceApi";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "SgeIfceClient";
@@ -242,7 +235,7 @@ using (var scope = app.Services.CreateScope())
             await context.Database.MigrateAsync();
         }
 
-        await DbInitializer.InitializeAsync(context);
+        await DbInitializer.InitializeAsync(context, builder.Environment.IsDevelopment());
     }
     catch (Exception ex)
     {

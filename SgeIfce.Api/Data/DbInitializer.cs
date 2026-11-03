@@ -6,7 +6,7 @@ namespace SgeIfce.Api.Data;
 
 public static class DbInitializer
 {
-    public static async Task InitializeAsync(AppDbContext context)
+    public static async Task InitializeAsync(AppDbContext context, bool isDevelopment)
     {
         // Em bancos relacionais, não recria o banco se ele já existir.
         // Para SQLite/InMemory, mantém o comportamento de criação automática.
@@ -17,6 +17,11 @@ public static class DbInitializer
                 StringComparison.OrdinalIgnoreCase))
         {
             await context.Database.EnsureCreatedAsync();
+        }
+
+        if (!isDevelopment)
+        {
+            return;
         }
 
         // ============================================================

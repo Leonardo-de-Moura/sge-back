@@ -17,7 +17,7 @@ public class TokenService : ITokenService
 
     public (string token, DateTime expiresAt) GenerateToken(User user)
     {
-        var secretKey = _configuration["Jwt:SecretKey"] ?? "ChaveSuperSecretaPadraoSGEIFCEComMaisDe32BytesDeComprimento!";
+        var secretKey = JwtSecretKey.GetRequired(_configuration);
         var issuer = _configuration["Jwt:Issuer"] ?? "SgeIfceApi";
         var audience = _configuration["Jwt:Audience"] ?? "SgeIfceClient";
         var expirationHours = int.TryParse(_configuration["Jwt:ExpirationHours"], out var hours) ? hours : 24;
@@ -63,5 +63,22 @@ public class TokenService : ITokenService
         var token = tokenHandler.CreateToken(tokenDescriptor);
 
         return (tokenHandler.WriteToken(token), expiresAt);
+    }
+}
+
+internal static class JwtSecretKey
+{
+    public static string GetRequired(IConfiguration configuration)
+    {
+        var secretKey = configuration["Jwt:SecretKey"];
+        if (string.IsNullOrWhiteSpace(secretKey) ||
+            Encoding.UTF8.GetByteCount(secretKey) < 32)
+        {
+            throw new InvalidOperationException(
+                "Jwt:SecretKey deve ser configurada externamente e conter pelo menos 32 bytes UTF-8."
+            );
+        }
+
+        return secretKey;
     }
 }

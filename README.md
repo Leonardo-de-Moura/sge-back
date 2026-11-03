@@ -7,7 +7,7 @@ API RESTful oficial do **Sistema de Gestão de Eventos (SGE)** do **Instituto Fe
 ## 🚀 Tecnologias
 
 - **C# / .NET 8 SDK** (ASP.NET Core Web API)
-- **Entity Framework Core 8** (Code-First com suporte a SQLite e PostgreSQL)
+- **Entity Framework Core 8** (Code-First; a inicialização atual da API usa PostgreSQL)
 - **BCrypt.Net-Next** (Hashing seguro de senhas)
 - **System.IdentityModel.Tokens.Jwt** (Autenticação JWT Bearer)
 - **PDF vetorial** (certificado A4 horizontal no padrão visual IFCE, com moldura verde/vermelha, marca institucional, assinatura do organizador e código verificador)
@@ -40,6 +40,7 @@ backend/
 
 ### 1. Pré-requisitos
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) instalado.
+- PostgreSQL acessível localmente ou por uma connection string válida.
 
 ### 2. Restaurar dependências e compilar
 ```bash
@@ -47,7 +48,29 @@ dotnet restore SgeIfce.Api/SgeIfce.Api.csproj
 dotnet build SgeIfce.Api/SgeIfce.Api.csproj
 ```
 
-### 3. Executar a API
+### 3. Configurar PostgreSQL, CORS e segredo JWT
+
+A inicialização atual exige uma connection string PostgreSQL em
+`ConnectionStrings__DefaultConnection`, pelo menos uma origem em
+`Cors__AllowedOrigins__0` e um segredo em `Jwt__SecretKey`. O segredo precisa
+conter pelo menos 32 bytes UTF-8. Configure esses valores no ambiente antes de
+iniciar a API; por exemplo, em uma sessão local com PostgreSQL na máquina:
+
+```bash
+export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=sge_ifce_db;Username=postgres;Password=postgres"
+export Cors__AllowedOrigins__0="http://localhost:5173"
+export Jwt__SecretKey="$(openssl rand -base64 48)"
+```
+
+Use credenciais correspondentes à sua instalação PostgreSQL. O banco deve estar
+disponível e acessível pela connection string; a API aplica as migrations durante
+a inicialização. A execução direta com `dotnet run` não cria um banco SQLite.
+
+Não reutilize esse exemplo como mecanismo de provisionamento em produção, não
+inclua o valor em arquivos versionados e armazene segredos de implantação no
+gerenciador de secrets da plataforma.
+
+### 4. Executar a API
 ```bash
 dotnet run --project SgeIfce.Api/SgeIfce.Api.csproj --urls "http://localhost:5000"
 ```
@@ -57,7 +80,9 @@ A API estará disponível em:
 - **Swagger UI:** `http://localhost:5000/swagger`
 - **Health Check:** `http://localhost:5000/health`
 
-*Na primeira execução, o banco de dados SQLite (`sge_ifce.db`) será criado e semeado automaticamente.*
+Em ambiente `Development`, a API executa o seed de demonstração se o banco
+estiver vazio. Fora desse ambiente, o seed e a conversão de senhas legadas são
+ignorados.
 
 ---
 
@@ -68,8 +93,15 @@ Pré-requisitos: Docker Engine e o plugin Docker Compose instalados e em execuç
 Na pasta `dist-repos/sge-ifce-backend`, suba a API e o PostgreSQL:
 
 ```bash
+export JWT_SECRET_KEY="$(openssl rand -base64 48)"
 docker compose up --build
 ```
+
+O Compose exige `JWT_SECRET_KEY` e a repassa à API como `Jwt__SecretKey`.
+O segredo não deve ser salvo no repositório. O Compose define
+`ASPNETCORE_ENVIRONMENT=Development`; por isso, o banco de desenvolvimento pode
+receber os dados de demonstração. O seed e a conversão de senhas legadas são
+ignorados fora do ambiente Development.
 
 O Compose aguarda o PostgreSQL ficar saudável. Na primeira inicialização, a API
 aplica as migrations do Entity Framework e semeia o banco. A API estará disponível
@@ -104,6 +136,9 @@ desenvolvimento local; defina uma senha própria fora desse contexto.
 
 ## 🔑 Credenciais de Teste Pré-cadastradas
 
+Estas contas são criadas somente pelo seed no ambiente Development. Elas não são
+provisionadas em produção.
+
 | Perfil | E-mail | Senha | Identificação |
 |---|---|---|---|
 | **Aluno (Discente)** | `luzia@aluno.ifce.edu.br` | `123456` | Matrícula: `2023108922` |
@@ -121,6 +156,18 @@ Para adicionar novas origens em produção, configure a variável de ambiente:
 ```bash
 Cors__AllowedOrigins__0=https://meu-frontend.vercel.app
 ```
+
+## 🚀 Configuração no Render
+
+Configure `Jwt__SecretKey` como uma variável secreta do serviço da API no painel
+do Render, com pelo menos 32 bytes UTF-8. Configure também a connection string e
+as origens CORS conforme o ambiente. Não inclua o valor JWT em commits, logs,
+documentação pública ou variáveis expostas ao frontend.
+
+Alterar o segredo invalida todos os JWT assinados com o valor anterior; usuários
+com sessões ativas precisarão autenticar novamente. A rotação de produção não foi
+executada. Antes dela, planeje uma janela de reautenticação, atualize o secret no
+Render e reinicie/reimplante a API somente após a aprovação operacional.
 
 ## 📱 Check-in por QR Code
 

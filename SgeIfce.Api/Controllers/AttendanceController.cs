@@ -23,6 +23,11 @@ public class AttendanceController : ControllerBase
     [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<List<ParticipantAttendanceDto>>>> GetAttendancesByEvent(string eventId)
     {
+        if (!await IsEventOwnedByCurrentUserAsync(eventId))
+        {
+            return NotFound(ApiResponse<List<ParticipantAttendanceDto>>.Fail("Evento não encontrado."));
+        }
+
         var attendances = await _context.Attendances
             .Include(a => a.User)
             .Where(a => a.EventId == eventId)
@@ -51,9 +56,11 @@ public class AttendanceController : ControllerBase
     {
         var attendance = await _context.Attendances
             .Include(a => a.User)
+            .Include(a => a.Event)
             .FirstOrDefaultAsync(a => a.Id == id);
 
-        if (attendance == null)
+        if (attendance == null ||
+            !string.Equals(attendance.Event?.OrganizerId, GetCurrentUserId(), StringComparison.Ordinal))
         {
             return NotFound(ApiResponse<ParticipantAttendanceDto>.Fail("Registro de presença não encontrado."));
         }
@@ -96,8 +103,7 @@ public class AttendanceController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail("Lista de presenças vazia."));
         }
 
-        var eventExists = await _context.Events.AnyAsync(e => e.Id == dto.EventId);
-        if (!eventExists)
+        if (!await IsEventOwnedByCurrentUserAsync(dto.EventId))
         {
             return NotFound(ApiResponse<object>.Fail("Evento não encontrado."));
         }
@@ -278,5 +284,16 @@ public class AttendanceController : ControllerBase
             CheckedInAt = attendance.CheckedInAt ?? DateTime.UtcNow,
             AlreadyRegistered = false
         }, "Presença confirmada com sucesso!"));
+    }
+
+    private string? GetCurrentUserId() =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+
+    private Task<bool> IsEventOwnedByCurrentUserAsync(string eventId)
+    {
+        var userId = GetCurrentUserId();
+        return string.IsNullOrWhiteSpace(userId)
+            ? Task.FromResult(false)
+            : _context.Events.AnyAsync(e => e.Id == eventId && e.OrganizerId == userId);
     }
 }

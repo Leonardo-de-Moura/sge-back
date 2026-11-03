@@ -107,9 +107,7 @@ public class EventsController : ControllerBase
     [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<EventQrCodeResponseDto>>> GetEventQrCode(string eventId)
     {
-        var ev = await _context.Events
-            .AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Id == eventId);
+        var ev = await FindOwnedEventAsync(eventId);
 
         if (ev == null)
         {
@@ -136,8 +134,7 @@ public class EventsController : ControllerBase
     [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<EventQrCodeResponseDto>>> GenerateEventQrCode(string eventId, [FromBody] GenerateQrCodeRequestDto? dto)
     {
-        var ev = await _context.Events
-            .FirstOrDefaultAsync(e => e.Id == eventId);
+        var ev = await FindOwnedEventAsync(eventId);
 
         if (ev == null)
         {
@@ -175,8 +172,8 @@ public class EventsController : ControllerBase
     [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<List<ParticipantAttendanceDto>>>> GetEventAttendance(string eventId)
     {
-        var eventExists = await _context.Events.AnyAsync(e => e.Id == eventId);
-        if (!eventExists)
+        var ev = await FindOwnedEventAsync(eventId);
+        if (ev == null)
         {
             return NotFound(ApiResponse<List<ParticipantAttendanceDto>>.Fail("Evento não encontrado."));
         }
@@ -247,14 +244,11 @@ public class EventsController : ControllerBase
             return Conflict(CreateScheduleConflictResponse(conflict));
         }
 
-        var userIdClaim =
-            User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        var organizerId =
-            string.IsNullOrWhiteSpace(userIdClaim)
-                ? null
-                : userIdClaim;
+        var organizerId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(organizerId))
+        {
+            return Unauthorized(ApiResponse<EventResponseDto>.Fail("Usuário não autenticado."));
+        }
 
         var ev = new Event
         {
@@ -321,9 +315,9 @@ public class EventsController : ControllerBase
         string id,
         [FromBody] UpdateEventDto dto)
     {
+        await using var eventLock = await PostgresEventLock.AcquireAsync(_context, id);
         var ev = await _context.Events
             .Include(e => e.Activities)
-            .Include(e => e.Registrations)
             .FirstOrDefaultAsync(e => e.Id == id);
 
         if (ev == null)
@@ -334,6 +328,22 @@ public class EventsController : ControllerBase
                 )
             );
         }
+
+        if (!string.Equals(ev.OrganizerId, GetCurrentUserId(), StringComparison.Ordinal))
+        {
+            return NotFound(ApiResponse<EventResponseDto>.Fail("Evento não encontrado."));
+        }
+
+        var confirmedRegistrations = await _context.Registrations.CountAsync(r =>
+            r.EventId == ev.Id && r.Status == "confirmado");
+        if (dto.TotalSlots is > 0 && dto.TotalSlots.Value < confirmedRegistrations)
+        {
+            return Conflict(ApiResponse<EventResponseDto>.Fail(
+                "A capacidade não pode ser menor que a quantidade de inscrições confirmadas."
+            ));
+        }
+
+        ev.EnrolledSlots = confirmedRegistrations;
 
         var effectiveStartDate = NormalizeUtc(dto.StartDate ?? ev.StartDate);
         var effectiveEndDate = dto.EndDate.HasValue
@@ -434,6 +444,11 @@ public class EventsController : ControllerBase
             );
         }
 
+        if (!string.Equals(ev.OrganizerId, GetCurrentUserId(), StringComparison.Ordinal))
+        {
+            return NotFound(ApiResponse<object>.Fail("Evento não encontrado."));
+        }
+
         // Mantém o evento no banco e apenas o encerra.
         ev.Status = "Encerrado";
 
@@ -451,32 +466,40 @@ public class EventsController : ControllerBase
     [Authorize(Roles = "Professor")]
     public async Task<ActionResult<ApiResponse<DashboardStatsDto>>> GetDashboardStats()
     {
+        var userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(ApiResponse<DashboardStatsDto>.Fail("Usuário não autenticado."));
+        }
+
         var totalEvents =
-            await _context.Events.CountAsync();
+            await _context.Events.CountAsync(e => e.OrganizerId == userId);
 
         var activeEvents =
             await _context.Events.CountAsync(
-                e => e.Status == "Aberto"
+                e => e.OrganizerId == userId && e.Status == "Aberto"
             );
 
         var totalEnrolled =
             await _context.Registrations.CountAsync(
-                r => r.Status == "confirmado"
+                r => r.Event != null && r.Event.OrganizerId == userId && r.Status == "confirmado"
             );
 
         var todayEnrolled =
             await _context.Registrations.CountAsync(
                 r =>
+                    r.Event != null &&
+                    r.Event.OrganizerId == userId &&
                     r.CreatedAt >= DateTime.UtcNow.Date &&
                     r.Status == "confirmado"
             );
 
         var totalAttendanceRecords =
-            await _context.Attendances.CountAsync();
+            await _context.Attendances.CountAsync(a => a.Event != null && a.Event.OrganizerId == userId);
 
         var presentAttendanceRecords =
             await _context.Attendances.CountAsync(
-                a => a.Status == "presente"
+                a => a.Event != null && a.Event.OrganizerId == userId && a.Status == "presente"
             );
 
         var percentage =
@@ -490,11 +513,13 @@ public class EventsController : ControllerBase
                 : 84.0;
 
         var issuedCerts =
-            await _context.Certificates.CountAsync();
+            await _context.Certificates.CountAsync(c => c.Event != null && c.Event.OrganizerId == userId);
 
         var pendingCerts =
             await _context.Attendances.CountAsync(
                 a =>
+                    a.Event != null &&
+                    a.Event.OrganizerId == userId &&
                     a.Status == "presente" &&
                     !a.CertificateIssued
             );
@@ -513,6 +538,21 @@ public class EventsController : ControllerBase
         return Ok(
             ApiResponse<DashboardStatsDto>.Ok(stats)
         );
+    }
+
+    private string? GetCurrentUserId() =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+
+    private async Task<Event?> FindOwnedEventAsync(string eventId)
+    {
+        var userId = GetCurrentUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return null;
+        }
+
+        return await _context.Events
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizerId == userId);
     }
 
     private static DateTime NormalizeUtc(DateTime value)
@@ -637,10 +677,9 @@ public class EventsController : ControllerBase
 
         var status = e.Status;
 
-        if (status == "Aberto" &&
-            enrolledCount >= e.TotalSlots)
+        if (status is "Aberto" or "Esgotado")
         {
-            status = "Esgotado";
+            status = enrolledCount >= e.TotalSlots ? "Esgotado" : "Aberto";
         }
 
         var day = e.StartDate.ToString("dd");

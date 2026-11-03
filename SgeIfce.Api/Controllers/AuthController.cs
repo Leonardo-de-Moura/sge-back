@@ -175,71 +175,14 @@ public class AuthController : ControllerBase
 
     [HttpPost("register/teacher")]
     [AllowAnonymous]
-    public async Task<ActionResult<ApiResponse<UserProfileDto>>> RegisterTeacher(
+    public ActionResult<ApiResponse<UserProfileDto>> RegisterTeacher(
         [FromBody] RegisterTeacherDto dto)
     {
-        if (!ModelState.IsValid)
-        {
-            var errors = ModelState.Values
-                .SelectMany(v => v.Errors)
-                .Select(e => e.ErrorMessage)
-                .ToList();
-
-            return BadRequest(
-                ApiResponse<UserProfileDto>.Fail(
-                    "Dados de cadastro inválidos.",
-                    errors
-                )
-            );
-        }
-
-        var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
-
-        if (await _context.Users.AnyAsync(
-                u => u.Email.ToLower() == normalizedEmail))
-        {
-            return Conflict(
-                ApiResponse<UserProfileDto>.Fail(
-                    "E-mail já cadastrado.",
-                    "O e-mail informado já está em uso por outro usuário."
-                )
-            );
-        }
-
-        var user = new User
-        {
-            Id = Guid.NewGuid().ToString(),
-            Name = dto.Name.Trim(),
-            Email = normalizedEmail,
-            PasswordHash = _passwordHasher.Hash(dto.Password),
-            Role = "Professor",
-            Siape = dto.Siape.Trim(),
-            CreatedAt = DateTime.UtcNow,
-            EmailConfirmed = false
-        };
-
-        _context.Users.Add(user);
-
-        await _context.SaveChangesAsync();
-
-        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
-        var confirmationLink = $"{frontendUrl.TrimEnd('/')}/login/professor?confirmed=1";
-        await _emailService.SendAccountConfirmationAsync(user.Email, confirmationLink);
-
-        var profile = new UserProfileDto
-        {
-            Id = user.Id,
-            Name = user.Name,
-            Email = user.Email,
-            Role = user.Role,
-            Siape = user.Siape
-        };
-
         return StatusCode(
-            201,
-            ApiResponse<UserProfileDto>.Ok(
-                profile,
-                "Conta de docente criada com sucesso."
+            StatusCodes.Status403Forbidden,
+            ApiResponse<UserProfileDto>.Fail(
+                "Cadastro de docente indisponível.",
+                "A criação de contas de professor requer aprovação administrativa."
             )
         );
     }

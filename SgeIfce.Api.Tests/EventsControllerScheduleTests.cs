@@ -149,7 +149,10 @@ public class EventsControllerScheduleTests
         {
             HttpContext = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity())
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "teacher-1")
+                ], "Test"))
             }
         }
     };
@@ -171,6 +174,7 @@ public class EventsControllerScheduleTests
         Location = location,
         TotalSlots = 10,
         Status = "Aberto",
+        OrganizerId = "teacher-1",
         DayMonth = "27 SET",
         CreatedAt = EventDate
     };
