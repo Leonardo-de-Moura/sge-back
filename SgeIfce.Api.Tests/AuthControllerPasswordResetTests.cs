@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
 using SgeIfce.Api.Controllers;
@@ -101,12 +102,7 @@ public class AuthControllerPasswordResetTests
             {
                 ["FrontendUrl"] = "http://localhost:3000",
                 ["PasswordReset:TokenExpirationMinutes"] = "30",
-                ["Email:Host"] = "",
-                ["Email:Port"] = "587",
-                ["Email:Username"] = "",
-                ["Email:Password"] = "",
-                ["Email:From"] = "noreply@sge-ifce.edu.br",
-                ["Email:FromName"] = "SGE-IFCE"
+                ["Email:From"] = "noreply@sge-ifce.edu.br"
             })
             .Build();
 
@@ -115,19 +111,15 @@ public class AuthControllerPasswordResetTests
             new TokenService(config),
             new BcryptPasswordHasher(),
             new NoOpEmailService(),
+            new EmailConfirmationService(context),
             new PasswordResetService(context, config),
-            config);
+            config,
+            NullLogger<AuthController>.Instance);
     }
 
     private sealed class NoOpEmailService : IEmailService
     {
-        public Task SendEmailAsync(string toEmail, string subject, string htmlBody)
-            => Task.CompletedTask;
-
-        public Task SendPasswordResetAsync(string toEmail, string resetLink)
-            => Task.CompletedTask;
-
-        public Task SendAccountConfirmationAsync(string toEmail, string confirmationLink)
+        public Task SendAsync(string to, string subject, string html)
             => Task.CompletedTask;
     }
 }

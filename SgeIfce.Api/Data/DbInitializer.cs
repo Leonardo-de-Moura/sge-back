@@ -84,7 +84,9 @@ public static class DbInitializer
             PasswordHash = defaultPasswordHash,
             Role = "Aluno",
             Matricula = "2023108922",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            EmailConfirmedAt = DateTime.UtcNow
         };
 
         var profRicardo = new User
@@ -95,7 +97,9 @@ public static class DbInitializer
             PasswordHash = defaultPasswordHash,
             Role = "Professor",
             Siape = "1849201",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            EmailConfirmedAt = DateTime.UtcNow
         };
 
         var alunoAline = new User
@@ -106,7 +110,9 @@ public static class DbInitializer
             PasswordHash = defaultPasswordHash,
             Role = "Aluno",
             Matricula = "2023104501",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            EmailConfirmedAt = DateTime.UtcNow
         };
 
         var alunoBruno = new User
@@ -117,7 +123,9 @@ public static class DbInitializer
             PasswordHash = defaultPasswordHash,
             Role = "Aluno",
             Matricula = "2022108912",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            EmailConfirmedAt = DateTime.UtcNow
         };
 
         var alunoCamila = new User
@@ -128,7 +136,9 @@ public static class DbInitializer
             PasswordHash = defaultPasswordHash,
             Role = "Aluno",
             Matricula = "2023201103",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            EmailConfirmedAt = DateTime.UtcNow
         };
 
         var alunoDiego = new User
@@ -139,7 +149,9 @@ public static class DbInitializer
             PasswordHash = defaultPasswordHash,
             Role = "Aluno",
             Matricula = "2021104490",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            EmailConfirmedAt = DateTime.UtcNow
         };
 
         var alunoEduarda = new User
@@ -150,7 +162,9 @@ public static class DbInitializer
             PasswordHash = defaultPasswordHash,
             Role = "Aluno",
             Matricula = "2024102219",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            EmailConfirmedAt = DateTime.UtcNow
         };
 
         var alunoFelipe = new User
@@ -161,7 +175,9 @@ public static class DbInitializer
             PasswordHash = defaultPasswordHash,
             Role = "Aluno",
             Matricula = "2022209931",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            EmailConfirmed = true,
+            EmailConfirmedAt = DateTime.UtcNow
         };
 
         await context.Users.AddRangeAsync(

@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<EmailConfirmationToken> EmailConfirmationTokens => Set<EmailConfirmationToken>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<Registration> Registrations => Set<Registration>();
@@ -65,6 +66,25 @@ public class AppDbContext : DbContext
             entity.HasOne(t => t.User)
                 .WithMany(u => u.PasswordResetTokens)
                 .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmailConfirmationToken>(entity =>
+        {
+            entity.ToTable("email_confirmation_tokens");
+
+            entity.HasKey(token => token.Id);
+
+            entity.HasIndex(token => token.UserId)
+                .HasDatabaseName("IX_email_confirmation_tokens_UserId");
+
+            entity.HasIndex(token => token.TokenHash)
+                .IsUnique()
+                .HasDatabaseName("IX_email_confirmation_tokens_TokenHash");
+
+            entity.HasOne(token => token.User)
+                .WithMany(user => user.EmailConfirmationTokens)
+                .HasForeignKey(token => token.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

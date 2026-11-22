@@ -178,3 +178,36 @@ ativo e o aluno precisa ter inscrição no evento. As colunas do QR Code são ap
 automaticamente pela migration na inicialização da API.
 O endereço de check-in usa a origem atual do frontend, sem exigir uma configuração
 adicional específica para QR Code.
+
+## ✉️ Confirmação de e-mail
+
+O cadastro de aluno envia um link de confirmação por meio da API HTTP do Resend.
+Configure `Email:ApiKey` e `Email:From` fora dos arquivos versionados. Em desenvolvimento,
+o projeto já está configurado para User Secrets; defina os valores:
+
+```bash
+dotnet user-secrets set "Email:ApiKey" "<CHAVE_DA_API_RESEND>" --project SgeIfce.Api/SgeIfce.Api.csproj
+dotnet user-secrets set "Email:From" "SGE.IFCE <noreply@seu-dominio-verificado>" --project SgeIfce.Api/SgeIfce.Api.csproj
+dotnet user-secrets set "FrontendUrl" "http://localhost:5173" --project SgeIfce.Api/SgeIfce.Api.csproj
+```
+
+Em produção, defina `Email__ApiKey`, `Email__From` e `FrontendUrl` como variáveis
+de ambiente/secrets do serviço. As mensagens de confirmação expiram em 24 horas;
+o login fica bloqueado até a confirmação. Para desenvolvimento, `SgeIfce.Api.http`
+contém exemplos de cadastro, confirmação, reenvio e login.
+
+Os limites são configuráveis em `RateLimiting`:
+
+| Endpoint | Requisições por IP | Janela padrão |
+|---|---:|---:|
+| Cadastro de aluno | 30 | 15 minutos |
+| Reenvio de confirmação | 10 | 15 minutos |
+| Recuperação de senha | 10 | 15 minutos |
+
+Se a API estiver atrás de um proxy reverso com endereço conhecido, configure-o em
+`ForwardedHeaders__KnownProxies__0` (adicione outros índices se necessário) para
+que o middleware use o IP original encaminhado em `X-Forwarded-For`. Em hospedagens
+como Render ou Railway, onde o endereço do proxy pode não ser fixo, é possível
+definir `ForwardedHeaders__TrustAllProxies=true`. Essa opção só deve ser habilitada
+quando a aplicação não puder ser acessada diretamente, pois um cliente que alcançar
+diretamente a API poderá falsificar `X-Forwarded-For` e contornar o rate limit por IP.

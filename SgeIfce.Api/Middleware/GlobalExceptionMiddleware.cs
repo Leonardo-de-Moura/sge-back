@@ -58,7 +58,7 @@ public class GlobalExceptionMiddleware
 
         var response = ApiResponse<object>.Fail(
             "Ocorreu um erro interno no processamento da solicitação.",
-            exception.Message
+            "Tente novamente mais tarde."
         );
 
         var json = JsonSerializer.Serialize(response, JsonOptions);

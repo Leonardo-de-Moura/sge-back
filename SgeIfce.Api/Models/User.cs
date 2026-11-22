@@ -60,4 +60,6 @@ public class User
     public ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
 
     public ICollection<PasswordResetToken> PasswordResetTokens { get; set; } = new List<PasswordResetToken>();
+
+    public ICollection<EmailConfirmationToken> EmailConfirmationTokens { get; set; } = new List<EmailConfirmationToken>();
 }

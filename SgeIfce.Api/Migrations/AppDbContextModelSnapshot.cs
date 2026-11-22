@@ -206,6 +206,43 @@ namespace SgeIfce.Api.Migrations
                     b.ToTable("certificates", (string)null);
                 });
 
+            modelBuilder.Entity("SgeIfce.Api.Models.EmailConfirmationToken", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_email_confirmation_tokens_TokenHash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_email_confirmation_tokens_UserId");
+
+                    b.ToTable("email_confirmation_tokens", (string)null);
+                });
+
             modelBuilder.Entity("SgeIfce.Api.Models.Event", b =>
                 {
                     b.Property<string>("Id")
@@ -516,6 +553,17 @@ namespace SgeIfce.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SgeIfce.Api.Models.EmailConfirmationToken", b =>
+                {
+                    b.HasOne("SgeIfce.Api.Models.User", "User")
+                        .WithMany("EmailConfirmationTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SgeIfce.Api.Models.Event", b =>
                 {
                     b.HasOne("SgeIfce.Api.Models.User", "Organizer")
@@ -572,6 +620,8 @@ namespace SgeIfce.Api.Migrations
                     b.Navigation("Attendances");
 
                     b.Navigation("Certificates");
+
+                    b.Navigation("EmailConfirmationTokens");
 
                     b.Navigation("OrganizedEvents");
 

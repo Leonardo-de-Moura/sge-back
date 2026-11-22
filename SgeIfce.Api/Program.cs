@@ -1,10 +1,13 @@
 using System.Text;
+using System.Net;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
+using SgeIfce.Api;
 using SgeIfce.Api.Data;
 using SgeIfce.Api.Middleware;
 using SgeIfce.Api.Services;
@@ -49,7 +52,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
-builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddHttpClient<IEmailService, ResendEmailService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
 builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 builder.Services.AddScoped<ICertificatePdfService, CertificatePdfService>();
 
@@ -145,6 +152,37 @@ builder.Services.AddCors(options =>
             .AllowCredentials();
     });
 });
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+
+    if (builder.Configuration.GetValue<bool>("ForwardedHeaders:TrustAllProxies"))
+    {
+        options.KnownProxies.Clear();
+        options.KnownNetworks.Clear();
+        return;
+    }
+
+    var knownProxies = builder.Configuration
+        .GetSection("ForwardedHeaders:KnownProxies")
+        .Get<string[]>()
+        ?? Array.Empty<string>();
+
+    foreach (var proxy in knownProxies)
+    {
+        if (!IPAddress.TryParse(proxy, out var address))
+        {
+            throw new InvalidOperationException(
+                "ForwardedHeaders:KnownProxies contém um endereço IP inválido.");
+        }
+
+        options.KnownProxies.Add(address);
+    }
+});
+
+RateLimitingSetup.AddConfiguredRateLimiting(builder.Services, builder.Configuration);
 
 // ============================================================
 // 5. CONTROLLERS
@@ -255,6 +293,8 @@ using (var scope = app.Services.CreateScope())
 // 9. PIPELINE HTTP
 // ============================================================
 
+app.UseForwardedHeaders();
+
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // Swagger
@@ -272,6 +312,8 @@ app.UseSwaggerUI(c =>
 
 // CORS
 app.UseCors("SgeCorsPolicy");
+
+app.UseRateLimiter();
 
 // Autenticação
 app.UseAuthentication();

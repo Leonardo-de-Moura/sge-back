@@ -95,3 +95,17 @@ public class ResetPasswordDto
     public string ConfirmPassword { get; set; } = string.Empty;
 }
 
+public class ConfirmEmailDto
+{
+    [Required(ErrorMessage = "O token de confirmação é obrigatório.")]
+    [StringLength(64, MinimumLength = 64, ErrorMessage = "O token de confirmação é inválido.")]
+    public string Token { get; set; } = string.Empty;
+}
+
+public class ResendConfirmationDto
+{
+    [Required(ErrorMessage = "O e-mail institucional é obrigatório.")]
+    [EmailAddress(ErrorMessage = "Formato de e-mail inválido.")]
+    [MaxLength(150, ErrorMessage = "O e-mail deve ter no máximo 150 caracteres.")]
+    public string Email { get; set; } = string.Empty;
+}

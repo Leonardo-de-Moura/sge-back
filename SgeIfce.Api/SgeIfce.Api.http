@@ -9,3 +9,44 @@ GET {{SgeIfce.Api_HostAddress}}/api/events
 Accept: application/json
 
 ###
+
+POST {{SgeIfce.Api_HostAddress}}/api/auth/register/student
+Content-Type: application/json
+
+{
+  "name": "Nome do Aluno",
+  "email": "aluno@ifce.edu.br",
+  "matricula": "20260001",
+  "password": "Senha123",
+  "confirmPassword": "Senha123"
+}
+
+###
+
+POST {{SgeIfce.Api_HostAddress}}/api/auth/confirm-email
+Content-Type: application/json
+
+{
+  "token": "{{confirmationToken}}"
+}
+
+###
+
+POST {{SgeIfce.Api_HostAddress}}/api/auth/resend-confirmation
+Content-Type: application/json
+
+{
+  "email": "aluno@ifce.edu.br"
+}
+
+###
+
+POST {{SgeIfce.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "aluno@ifce.edu.br",
+  "password": "Senha123"
+}
+
+###
